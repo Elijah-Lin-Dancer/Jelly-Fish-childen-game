@@ -10,12 +10,13 @@
 
 ### 👉 [**🌐 立即在线体验 · Live Demo**](https://elijah-lin-dancer.github.io/Jelly-Fish-childen-game/) 👈
 
-[![Live Demo](https://img.shields.io/badge/🌐_Live_Demo-在线体验-0891b2?style=for-the-badge&logo=githubpages&logoColor=white)](https://elijah-lin-dancer.github.io/Jelly-Fish-childen-game/)
-[![License](https://img.shields.io/badge/📄_License-MIT-3da639?style=for-the-badge)](https://github.com/Elijah-Lin-Dancer/Jelly-Fish-childen-game/blob/main/README.md)
-[![Vanilla JS](https://img.shields.io/badge/⚡_Vanilla-JS-f7df1e?style=for-the-badge&logo=javascript&logoColor=black)](https://github.com/Elijah-Lin-Dancer/Jelly-Fish-childen-game)
-[![Dependencies](https://img.shields.io/badge/📦_Dependencies-0-2ea44f?style=for-the-badge)](https://github.com/Elijah-Lin-Dancer/Jelly-Fish-childen-game)
-[![Bilingual](https://img.shields.io/badge/🌐_i18n-EN_%7C_中文-8b5cf6?style=for-the-badge)](https://github.com/Elijah-Lin-Dancer/Jelly-Fish-childen-game)
-[![Mobile](https://img.shields.io/badge/📱_Mobile-Ready-e11d48?style=for-the-badge)](https://github.com/Elijah-Lin-Dancer/Jelly-Fish-childen-game)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-在线体验-0891b2?style=for-the-badge&logo=githubpages&logoColor=white)](https://elijah-lin-dancer.github.io/Jelly-Fish-childen-game/)
+[![License](https://img.shields.io/badge/License-MIT-3da639?style=for-the-badge&logo=opensourceinitiative&logoColor=white)](https://github.com/Elijah-Lin-Dancer/Jelly-Fish-childen-game)
+[![Vanilla JS](https://img.shields.io/badge/Vanilla-JS-f7df1e?style=for-the-badge&logo=javascript&logoColor=black)](https://github.com/Elijah-Lin-Dancer/Jelly-Fish-childen-game)
+[![Dependencies](https://img.shields.io/badge/Dependencies-0-2ea44f?style=for-the-badge)](https://github.com/Elijah-Lin-Dancer/Jelly-Fish-childen-game)
+[![i18n](https://img.shields.io/badge/i18n-EN_%7C_中文-8b5cf6?style=for-the-badge&logo=googletranslate&logoColor=white)](https://github.com/Elijah-Lin-Dancer/Jelly-Fish-childen-game)
+[![Mobile](https://img.shields.io/badge/Mobile-Ready-e11d48?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Elijah-Lin-Dancer/Jelly-Fish-childen-game)
+[![Canvas 2D](https://img.shields.io/badge/Canvas_2D-Web_API-2ea44f?style=for-the-badge&logo=html5&logoColor=white)](https://github.com/Elijah-Lin-Dancer/Jelly-Fish-childen-game)
 
 <br />
 
@@ -214,7 +215,7 @@ python3 -m http.server 8080
 
 **给个 star ⭐ 就是最好的鼓励！**
 
-[![Star](https://img.shields.io/github/stars/Elijah-Lin-Dancer/Jelly-Fish-childen-game?style=for-the-badge&logo=github&label=⭐%20Star%20this%20repo&color=f5a623)](https://github.com/Elijah-Lin-Dancer/Jelly-Fish-childen-game/stargazers)
+[![Star this repo](https://img.shields.io/github/stars/Elijah-Lin-Dancer/Jelly-Fish-childen-game?style=for-the-badge&logo=github&label=Star&color=f5a623)](https://github.com/Elijah-Lin-Dancer/Jelly-Fish-childen-game/stargazers)
 
 也欢迎 [提 Issue](https://github.com/Elijah-Lin-Dancer/Jelly-Fish-childen-game/issues) 反馈想法或问题 💡
 
