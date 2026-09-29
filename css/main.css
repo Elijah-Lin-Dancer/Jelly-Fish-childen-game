@@ -1,0 +1,275 @@
+/* ============================================================
+   海洋世界 · 主样式
+   ============================================================ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:root {
+  --hud-fg: rgba(220, 240, 255, 0.85);
+  --hud-dim: rgba(200, 230, 255, 0.55);
+  --btn-bg: rgba(10, 40, 80, 0.45);
+  --btn-bg-hover: rgba(30, 80, 140, 0.65);
+  --btn-border: rgba(150, 210, 255, 0.35);
+  --accent: #ffd84d;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #020a1c;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  touch-action: none;
+  overscroll-behavior: none;
+  /* 修复 iOS 长按弹系统菜单 */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+body {
+  position: fixed;
+  inset: 0;
+  height: 100%;
+  min-height: -webkit-fill-available;
+}
+
+#ocean-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+/* ===== HUD 基础 ===== */
+.hud {
+  position: fixed;
+  z-index: 10;
+  pointer-events: none;
+  color: var(--hud-fg);
+  text-shadow: 0 0 12px rgba(80, 180, 255, 0.6);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 左上：标题 + 操作提示 */
+.hud-top-left {
+  top: calc(14px + var(--safe-t));
+  left: calc(14px + var(--safe-l));
+  font-size: 13px;
+  line-height: 1.65;
+  max-width: 62vw;
+  padding: 8px 14px 9px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(4, 20, 42, 0.5), rgba(4, 20, 42, 0.16));
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+}
+
+.hud-top-left .title {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+  line-height: 1.35;
+  background: linear-gradient(90deg, #a8e6ff, #ffb3e6, #b3ffd9);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 1px 6px rgba(20, 60, 110, 0.85));
+}
+
+.hud-top-left .hint {
+  opacity: 0.72;
+  font-size: 12px;
+  line-height: 1.6;
+  transition: color 0.3s;
+}
+.hud-top-left .hint.feed {
+  color: var(--accent);
+  opacity: 0.95;
+}
+
+/* 右上：图鉴 + 时段 */
+.hud-top-right {
+  top: calc(14px + var(--safe-t));
+  right: calc(14px + var(--safe-r));
+  text-align: right;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.hud-top-right .dex {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 20px;
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-variant-numeric: tabular-nums;
+  transition: border-color 0.4s, color 0.4s;
+}
+.hud-top-right .dex.complete {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.hud-top-right .phase {
+  margin-top: 6px;
+  opacity: 0.6;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+/* 右下：按钮组 */
+.hud-bottom-right {
+  bottom: calc(14px + var(--safe-b));
+  right: calc(14px + var(--safe-r));
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: calc(100vw - 28px - var(--safe-l) - var(--safe-r));
+}
+
+/* 左下：品牌 + FPS */
+.hud-bottom-left {
+  bottom: calc(12px + var(--safe-b));
+  left: calc(12px + var(--safe-l));
+  font-size: 10.5px;
+  letter-spacing: 1px;
+  line-height: 1.6;
+  padding: 5px 10px;
+  border-radius: 10px;
+  background: rgba(4, 18, 38, 0.42);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: rgba(210, 235, 255, 0.62);
+}
+
+/* ===== 按钮 ===== */
+.btn {
+  pointer-events: auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #cfeaff;
+  font-size: 17px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s, background 0.2s, border-color 0.2s, color 0.2s;
+}
+.btn:hover { background: var(--btn-bg-hover); transform: scale(1.08); }
+.btn:active { transform: scale(0.94); }
+.btn.muted { opacity: 0.42; }
+.btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 16px rgba(255, 216, 77, 0.35);
+}
+
+/* ===== Toast ===== */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(84px + var(--safe-b));
+  transform: translate(-50%, 12px);
+  z-index: 20;
+  padding: 9px 20px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 220, 120, 0.5);
+  background: rgba(8, 30, 60, 0.75);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #ffe9a8;
+  font-size: 13px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s, transform 0.35s;
+}
+.toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* ===== Loader ===== */
+.loader {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #020a1c;
+  color: #a8d8ff;
+  font-size: 16px;
+  letter-spacing: 4px;
+  transition: opacity 0.8s;
+}
+.loader.hide { opacity: 0; pointer-events: none; }
+
+/* ===== 英文排版调整（中文 letter-spacing 在英文下过散） ===== */
+html[lang="en"] .hud-top-left .title { letter-spacing: 0.5px; font-size: 18px; }
+html[lang="en"] .loader { letter-spacing: 1.5px; }
+html[lang="en"] .hud-bottom-left { letter-spacing: 0.6px; }
+html[lang="en"] .toast { letter-spacing: 0.3px; }
+
+/* ===== 移动端 ===== */
+@media (max-width: 480px) {
+  .hud-top-left {
+    font-size: 11px;
+    max-width: 62vw;
+    padding: 7px 11px 8px;
+  }
+  .hud-top-left .title { font-size: 15px; margin-bottom: 5px; }
+  /* 修复：不再隐藏操作提示，缩小显示 */
+  .hud-top-left .hint {
+    font-size: 10px;
+    opacity: 0.6;
+    line-height: 1.55;
+  }
+  .hud-top-right { font-size: 11px; }
+  .hud-top-right .dex { padding: 4px 9px; }
+  .btn { width: 36px; height: 36px; font-size: 14px; }
+  .hud-bottom-right { gap: 6px; }
+  /* 移动端隐藏左下角文字，避免与按钮组重叠 */
+  .hud-bottom-left { display: none; }
+  .toast { font-size: 12px; padding: 8px 16px; bottom: calc(66px + var(--safe-b)); }
+}
+
+/* 横屏：压缩纵向占用 */
+@media (orientation: landscape) and (max-height: 480px) {
+  .hud-top-left .title { font-size: 14px; margin-bottom: 2px; }
+  .hud-top-left .hint { font-size: 10px; }
+  .hud-top-right .phase { display: none; }
+  .btn { width: 38px; height: 38px; }
+  .hud-bottom-left { display: none; }
+}
+
+/* 减少动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .btn, .toast, .loader { transition: none; }
+}

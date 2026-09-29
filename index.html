@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#031a3a">
+<meta name="description" content="An immersive jellyfish ocean — attract, feed and collect six species of glowing jellyfish.">
+<title>Jellyfish Ocean</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🪼</text></svg>">
+<link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+
+<canvas id="ocean-canvas"></canvas>
+
+<div class="hud hud-top-left">
+  <div class="title" data-i18n="hud.title">Jellyfish Ocean</div>
+  <div class="hint" id="hint">
+    <span data-i18n="hud.hint.move">Move — attract jellyfish</span><br>
+    <span data-i18n="hud.hint.click">Tap — bubbles &amp; ripples</span><br>
+    <span data-i18n="hud.hint.hold">Hold — summon a jellyfish</span>
+  </div>
+</div>
+
+<div class="hud hud-top-right">
+  <div class="dex" id="dex">
+    <span>🪼</span><span id="dex-text" data-i18n="dex.label">0/6 species found</span>
+  </div>
+  <div class="phase" id="phase-text" data-i18n="phase.noon">Midday</div>
+</div>
+
+<div class="hud hud-bottom-right">
+  <div class="btn" id="feed-btn" role="button" tabindex="0" data-i18n-title="btn.feed" aria-label="Feed">🫧</div>
+  <div class="btn" id="theme-btn" role="button" tabindex="0" data-i18n-title="btn.theme" aria-label="Theme">🌗</div>
+  <div class="btn" id="daynight-btn" role="button" tabindex="0" data-i18n-title="btn.daynight" aria-label="Day-night">🕐</div>
+  <div class="btn" id="sound-btn" role="button" tabindex="0" data-i18n-title="btn.sound" aria-label="Sound">🔇</div>
+  <div class="btn" id="lang-btn" role="button" tabindex="0" data-i18n-title="btn.lang" aria-label="Language">EN</div>
+</div>
+
+<div class="hud hud-bottom-left">
+  <div><span data-i18n="brand">JELLYFISH OCEAN · IMMERSIVE</span></div>
+  <div><span id="theme-text" data-i18n="theme.shallow">Sunlit Shallows</span> · <span id="fps-text">60 FPS</span></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="loader" id="loader" data-i18n="loader">Diving in…</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
