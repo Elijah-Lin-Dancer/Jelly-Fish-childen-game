@@ -51,8 +51,20 @@ python3 -m http.server 8080
 
 > **Note:** ES Modules require HTTP(S). Opening `index.html` via `file://` will fail due to CORS — use a local server or GitHub Pages.
 
-### GitHub Pages
-Push to a repo, then enable Pages on the `main` branch root. Works as-is.
+### 🌐 Live Demo / 在线预览
+
+**https://elijah-lin-dancer.github.io/Jelly-Fish-childen-game/**
+
+Hosted on **GitHub Pages** (built-in, no external service). Deployment is
+zero-config because the project is a pure static bundle:
+
+- **Source**: `Deploy from a branch` → `main` / `(root)`
+- **Build type**: `legacy` — GitHub's internal Pages builder, **no workflow file needed**
+- **Auto-sync**: every `git push origin main` re-triggers a build and republishes in ~1 minute
+- `.nojekyll` is committed so Jekyll leaves `js/` and other directories untouched
+
+To fork and run your own: push to a repo, then Settings → Pages → Source
+`Deploy from a branch` → `main` / `(root)` → Save. Works as-is.
 
 ---
 
