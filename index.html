@@ -16,7 +16,7 @@
 <canvas id="ocean-canvas"></canvas>
 
 <div class="hud hud-top-left">
-  <div class="title" data-i18n="hud.title">Jellyfish Ocean</div>
+  <div class="title" id="pond-title">Jellyfish Ocean</div>
   <div class="hint" id="hint">
     <span data-i18n="hud.hint.move">Move — attract jellyfish</span><br>
     <span data-i18n="hud.hint.click">Tap — bubbles &amp; ripples</span><br>
@@ -45,6 +45,19 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div class="home hide" id="home">
+  <div class="home-card">
+    <div class="home-jelly">🪼</div>
+    <div class="home-welcome" id="home-welcome">Welcome to</div>
+    <h1 class="home-title" id="home-title">Jellyfish Ocean</h1>
+    <div class="home-prompt" id="home-prompt">Name your pond</div>
+    <input class="home-input" id="pond-input" type="text" maxlength="24"
+           autocomplete="off" spellcheck="false" placeholder="My Pond" />
+    <div class="home-start" id="pond-start" role="button" tabindex="0">Start exploring</div>
+    <div class="home-hint" id="home-hint"></div>
+  </div>
+</div>
 
 <div class="loader" id="loader" data-i18n="loader">Diving in…</div>
 

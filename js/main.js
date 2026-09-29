@@ -10,6 +10,7 @@ import { createAudio } from './core/audio.js';
 import { createPerf } from './ui/perf.js';
 import { initI18n, t, toggleLang, applyI18n } from './ui/i18n.js';
 import { createHud } from './ui/hud.js';
+import { createHome } from './ui/home.js';
 import { createInteract, drawHoldRing } from './ui/interact.js';
 import { createBackground, createLightRays, createWaterSurface, createDepthHaze } from './systems/scenery.js';
 import { createDayNight } from './systems/dayNight.js';
@@ -73,6 +74,15 @@ const feeding = createFeeding(baits, (x, y) => {
   audio.bubble();
 });
 
+// ---------- 首页（欢迎 + 池塘命名） ----------
+const home = createHome({
+  onStart: () => {
+    // 首次进入：借用户手势解锁音频（浏览器自动播放策略）
+    audio.unlock();
+  },
+  onToast: (key) => hud.toast(key),
+});
+
 // ---------- HUD ----------
 const hud = createHud({
   toggleSound: () => {
@@ -87,6 +97,7 @@ const hud = createHud({
     toggleLang();
     hud.refreshLang();
     hud.refreshButtons();
+    home.refreshLang();
   },
   toggleTheme: () => {
     theme.toggle();
@@ -148,16 +159,16 @@ function seedWorld(keepJelly) {
   }
 }
 
-/** 软重建：保留现有水母，只重置环境 */
+/** 软重建：保留全部现有水母，只重置环境 */
 function softRebuild() {
   const kept = jellyfish.slice(0, quality.jellyfish * 1.5);
-  const needRefresh = jellyfish.slice(quality.jellyfish * 1.5);
-  // 让超出的水母自然移出
-  for (const j of needRefresh) {
+  const extra = jellyfish.slice(quality.jellyfish * 1.5);
+  // 超出的水母重新撒到可见区域内（保留，不再丢弃）
+  for (const j of extra) {
     j.x = rand(0, view.W);
     j.y = rand(0, view.H);
   }
-  seedWorld(kept);
+  seedWorld(kept.concat(extra));
 }
 
 // ---------- 生成 / 爆裂 ----------
@@ -330,9 +341,11 @@ let lastT = 0;
 let dtGlobal = 16.667;
 let tGlobal = 0;
 let fpsThrottle = 0;
+let running = true;
 
 // ---------- 主循环 ----------
 function loop(t) {
+  if (!running) return;
   if (!lastT) lastT = t;
   let dt = t - lastT;
   lastT = t;
@@ -359,6 +372,25 @@ function loop(t) {
   requestAnimationFrame(loop);
 }
 
+// ---------- 页面可见性：切后台暂停，切回重置时间基准 ----------
+// 否则昼夜相位会按真实流逝时间突跳（例如从天亮瞬间跳到天黑）
+function bindVisibility() {
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      running = false;
+      audio.suspend();
+    } else {
+      if (!running) {
+        running = true;
+        lastT = 0;        // 重置基准，下一帧 dt 归零，避免相位突跳
+        fpsThrottle = 0;
+        requestAnimationFrame(loop);
+      }
+      audio.resume();
+    }
+  });
+}
+
 // ---------- 启动 ----------
 function start() {
   // 必须先确定画布尺寸，否则 view.W/H 为 0，所有实体都会堆在原点
@@ -368,6 +400,7 @@ function start() {
 
   initI18n();
   applyI18n();
+  bindVisibility();
   hud.bind();
   hud.refreshDex();
   hud.refreshPhase();
@@ -376,6 +409,10 @@ function start() {
 
   seedWorld(null);
   // 注意：预置水母不自动收录 —— 玩家需主动点击接触才能发现物种
+
+  // 首页：欢迎页 + 池塘命名
+  home.bind();
+  home.show();
 
   requestAnimationFrame((t) => {
     if (loaderEl) {

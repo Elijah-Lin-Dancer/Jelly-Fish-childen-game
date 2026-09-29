@@ -205,7 +205,7 @@ export class Jellyfish {
     const nT = this.tentacles.length;
     for (let i = 0; i < nT; i++) {
       const t2 = this.tentacles[i];
-      const baseX = (i / (nT - 1) - 0.5) * r * 1.4;
+      const baseX = (i / Math.max(1, nT - 1) - 0.5) * r * 1.4;
       const segs = 14;
       ctx.beginPath();
       ctx.moveTo(baseX, r * 0.3);

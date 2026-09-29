@@ -231,6 +231,111 @@ body {
 }
 .loader.hide { opacity: 0; pointer-events: none; }
 
+/* ===== 游戏首页（欢迎 + 池塘命名） ===== */
+.home {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(3, 14, 32, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  transition: opacity 0.6s ease, visibility 0.6s;
+}
+.home.hide { opacity: 0; visibility: hidden; pointer-events: none; }
+
+.home-card {
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+  color: var(--hud-fg);
+}
+
+.home-jelly {
+  font-size: 52px;
+  line-height: 1;
+  margin-bottom: 14px;
+  animation: homeFloat 3.6s ease-in-out infinite;
+}
+@keyframes homeFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.home-welcome {
+  font-size: 13px;
+  letter-spacing: 3px;
+  color: var(--hud-dim);
+  margin-bottom: 6px;
+}
+
+.home-title {
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  margin-bottom: 26px;
+  color: #eaf6ff;
+  text-shadow: 0 0 24px rgba(120, 200, 255, 0.35);
+}
+
+.home-prompt {
+  font-size: 13px;
+  color: var(--hud-dim);
+  margin-bottom: 10px;
+}
+
+.home-input {
+  width: 100%;
+  padding: 13px 18px;
+  font-size: 16px; /* ≥16px 防 iOS 聚焦自动缩放 */
+  font-family: inherit;
+  text-align: center;
+  color: #eaf6ff;
+  background: rgba(10, 40, 80, 0.55);
+  border: 1px solid var(--btn-border);
+  border-radius: 12px;
+  outline: none;
+  transition: border-color 0.25s, box-shadow 0.25s;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.home-input::placeholder { color: rgba(200, 230, 255, 0.35); }
+.home-input:focus {
+  border-color: rgba(150, 210, 255, 0.8);
+  box-shadow: 0 0 0 3px rgba(90, 170, 255, 0.18);
+}
+
+.home-start {
+  margin-top: 18px;
+  padding: 13px 24px;
+  font-size: 15px;
+  letter-spacing: 1px;
+  color: #eaf6ff;
+  background: rgba(30, 90, 150, 0.6);
+  border: 1px solid rgba(150, 210, 255, 0.45);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.25s, transform 0.15s;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.home-start:hover { background: rgba(40, 115, 185, 0.75); }
+.home-start:active { transform: scale(0.97); }
+
+.home-hint {
+  margin-top: 14px;
+  font-size: 11px;
+  color: rgba(200, 230, 255, 0.4);
+  letter-spacing: 1px;
+}
+
+/* 左上角池塘标题：可点击改名 */
+.hud-top-left .title.renamed { cursor: pointer; }
+.hud-top-left .title.renamed:hover { color: #ffffff; }
+
 /* ===== 英文排版调整（中文 letter-spacing 在英文下过散） ===== */
 html[lang="en"] .hud-top-left .title { letter-spacing: 0.5px; font-size: 18px; }
 html[lang="en"] .loader { letter-spacing: 1.5px; }

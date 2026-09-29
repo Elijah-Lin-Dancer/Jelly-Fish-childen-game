@@ -81,8 +81,20 @@ export function createInteract(canvas, handlers) {
     if (e.button !== 0) return;
     pressStart(e, 'mouse');
   });
-  window.addEventListener('mouseup', () => {
-    if (pointer.down) pressEnd();
+  window.addEventListener('mouseup', (e) => {
+    if (!pointer.down) return;
+    // 在画布上按下、拖到 HUD 上释放时，不应在旧坐标误触发 onTap
+    const r = canvas.getBoundingClientRect();
+    const inside = e.clientX >= r.left && e.clientX <= r.right &&
+                   e.clientY >= r.top && e.clientY <= r.bottom;
+    if (inside) pressEnd();
+    else {
+      if (timer) { clearTimeout(timer); timer = null; }
+      holding = false;
+      longPressed = false;
+      pointer.down = false;
+      if (onMoveEnd) onMoveEnd();
+    }
   });
 
   // ---- 触摸 ----

@@ -14,6 +14,14 @@ export const LOCALES = {
     'brand': 'JELLYFISH OCEAN · IMMERSIVE',
     'loader': 'Diving in…',
 
+    'home.welcome': 'Welcome to',
+    'home.prompt': 'Name your pond',
+    'home.placeholder': 'My Pond',
+    'home.start': 'Start exploring',
+    'home.rename': 'Click to rename',
+    'pond.default': 'My Pond',
+    'pond.renamed': 'Pond renamed',
+
     'btn.sound': 'Ambient sound',
     'btn.lang': 'Switch language',
     'btn.theme': 'Switch theme',
@@ -52,6 +60,14 @@ export const LOCALES = {
     'hud.hint.feed': '撒饵模式 — 点击投放光饵',
     'brand': 'JELLYFISH OCEAN · 沉浸版',
     'loader': '潜入深海中…',
+
+    'home.welcome': '欢迎来到',
+    'home.prompt': '给你的池塘起个名字',
+    'home.placeholder': '我的池塘',
+    'home.start': '开始探索',
+    'home.rename': '点击改名',
+    'pond.default': '我的池塘',
+    'pond.renamed': '池塘已改名',
 
     'btn.sound': '环境音开关',
     'btn.lang': '切换语言',

@@ -93,7 +93,7 @@ export class FishSchool {
     const now = t || 0;
     this.cx += Math.sin(now * 0.0001 + this.cy) * 0.3;
     this.cy += Math.cos(now * 0.00008) * 0.2;
-    this.cx = (this.cx + W) % W;
+    this.cx = W > 0 ? (this.cx + W) % W : this.cx;
     this.cy = Math.max(H * 0.15, Math.min(H * 0.85, this.cy));
   }
 

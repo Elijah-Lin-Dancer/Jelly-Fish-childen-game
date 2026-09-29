@@ -114,8 +114,20 @@ export function createAudio() {
     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
   }
 
+  /** 页面切后台：挂起音频上下文省电 */
+  function suspend() {
+    try { if (audioCtx && audioCtx.state === 'running') audioCtx.suspend(); } catch (e) { /* 忽略 */ }
+  }
+
+  /** 页面回前台：仅在音效开启时恢复 */
+  function resume() {
+    try {
+      if (audioCtx && soundOn && audioCtx.state === 'suspended') audioCtx.resume();
+    } catch (e) { /* 忽略 */ }
+  }
+
   return {
-    init, unlock, toggle, bubble, modulate,
+    init, unlock, toggle, bubble, modulate, suspend, resume,
     get on() { return soundOn; },
   };
 }
