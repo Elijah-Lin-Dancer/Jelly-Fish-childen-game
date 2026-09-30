@@ -5,6 +5,7 @@
 
 import { rand, TAU, damp, clamp } from '../core/config.js';
 import { pointer, view, theme, dayNight } from '../core/state.js';
+import { randomTraits, normalizeTraits } from '../gameplay/genes.js';
 
 /** 六种配色（name 供图鉴使用） */
 export const JELLY_PALETTES = [
@@ -37,6 +38,17 @@ export class Jellyfish {
     this.interactions = 0;
     this.rare = opts.rare === true;   // 每日稀有客
 
+    // 阶段六：性状基因（size / glow / speed / tentacles）+ 繁育冷却
+    this.traits = opts.genes ? normalizeTraits(opts.genes) : randomTraits();
+    this.hybrid = false;
+    this.lastBredAt = 0;
+    this.bornAt = 0;
+
+    // 体型基因影响初始半径（±15%）
+    const sizeMod = 0.85 + this.traits.size * 0.3;
+    this.r *= sizeMod;
+    this.baseR = this.r;
+
     this.vx = rand(-0.3, 0.3);
     this.vy = rand(-0.2, 0.1);
     this.phase = rand(0, TAU);
@@ -64,6 +76,15 @@ export class Jellyfish {
 
   /** 应用存档数据 */
   _applyRestore(r) {
+    if (r.g && Array.isArray(r.g)) {
+      // 基因数组顺序：[size, glow, speed, tentacles]
+      const [sz, gl, sp, tn] = r.g;
+      this.traits = normalizeTraits({ size: sz, glow: gl, speed: sp, tentacles: tn });
+      const sizeMod = 0.85 + this.traits.size * 0.3;
+      this.r = this.baseR * sizeMod;
+      this.baseR = this.r;
+      this._buildTentacles();
+    }
     if (typeof r.scale === 'number') this.scale = clamp(r.scale, 0.4, 1.6);
     if (typeof r.age === 'number') this.age = Math.max(0, r.age);
     if (typeof r.interactions === 'number') this.interactions = Math.max(0, r.interactions | 0);
@@ -82,7 +103,9 @@ export class Jellyfish {
 
   _buildTentacles() {
     this.tentacles.length = 0;
-    const n = this.r > 35 ? 9 : 7;
+    // 触须基因：0..1 映射到 6..11 根
+    const tn = this.traits ? this.traits.tentacles : 0.5;
+    const n = Math.round(6 + tn * 5);
     for (let i = 0; i < n; i++) {
       this.tentacles.push({
         len: rand(this.r * 1.2, this.r * 2.6),
@@ -197,7 +220,20 @@ export class Jellyfish {
     const nightGlow = 1 + (1 - dayNight.sun) * 1.2;
     // 密度自适应：水母越多，单个外发光越收敛，避免叠加死白
     const crowd = Math.min(1, 12 / Math.max(4, Jellyfish.__count || 12));
-    const boost = (th.glowBoost * nightGlow + this.flash * 0.8) * (0.6 + crowd * 0.4);
+    // 辉光基因：0.6x..1.5x
+    const glowGene = 0.6 + (this.traits ? this.traits.glow : 0.5) * 0.9;
+    const boost = (th.glowBoost * nightGlow + this.flash * 0.8) * (0.6 + crowd * 0.4) * glowGene;
+    // 杂交个体：柔和的青蓝附加光晕，作为"混血"标识
+    if (this.hybrid) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(180, 235, 255, 0.35)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, r * 1.15, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
 
     ctx.save();
     ctx.translate(this.x, this.y);

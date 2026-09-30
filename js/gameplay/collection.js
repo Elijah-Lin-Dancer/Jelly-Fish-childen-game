@@ -10,7 +10,7 @@ const STORAGE_KEY = 'ocean.dex';
 
 /** 建一条空记录 */
 function emptyRecord() {
-  return { found: false, firstSeen: 0, seen: 0, mutated: 0 };
+  return { found: false, firstSeen: 0, seen: 0, mutated: 0, traits: null };
 }
 
 /** 确保 state 里存在 records（首次或旧数据迁移时构造） */
@@ -49,6 +49,7 @@ function load() {
         rec.firstSeen = +src.firstSeen || 0;
         rec.seen = +src.seen || 0;
         rec.mutated = +src.mutated || 0;
+        rec.traits = (src.traits && typeof src.traits === 'object') ? src.traits : null;
       }
     }
     syncCount();
@@ -94,11 +95,19 @@ export function createCollection(onUnlock, onComplete) {
       return true;
     },
 
-    /** 记录"见到"某物种（不必新收录），累加计数 */
-    see(index) {
+    /** 记录"见到"某物种（不必新收录），累加计数；可选记录性状（取各项较优者） */
+    see(index, traits) {
       if (index == null || index < 0 || index >= collection.total) return;
       const rec = ensureRecords()[index];
       rec.seen++;
+      if (traits) {
+        if (!rec.traits) rec.traits = {};
+        for (const k in traits) {
+          if (typeof traits[k] === 'number') {
+            rec.traits[k] = Math.max(rec.traits[k] || 0, traits[k]);
+          }
+        }
+      }
       persist();
     },
 

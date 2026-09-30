@@ -25,6 +25,10 @@ import { createEcosystem } from './systems/ecosystem.js';
 import { createCollection } from './gameplay/collection.js';
 import { createSave } from './gameplay/save.js';
 import { createAchievements } from './gameplay/achievements.js';
+import { createEconomy } from './gameplay/economy.js';
+import { createSpecialize } from './gameplay/specialize.js';
+import { createBreeding } from './gameplay/breeding.js';
+import { createLab } from './ui/lab.js';
 import { dailyRareIndex } from './gameplay/daily.js';
 import { Jellyfish, JELLY_PALETTES } from './entities/jellyfish.js';
 import { FishSchool } from './entities/fish.js';
@@ -57,6 +61,7 @@ const stats = {
   summoned: 0,   // 召唤的水母数
   fed: 0,        // 投喂次数
   mutations: 0,  // 变异次数
+  breeds: 0,     // 繁育次数（阶段六）
   get speciesFound() { return collection.found.size; },
   get speciesTotal() { return collection.total; },
 };
@@ -89,6 +94,17 @@ const achievements = createAchievements((a) => {
   hud.refreshAch(achievements.count);
 });
 
+// ---------- 阶段六：生物荧光经济 + 专长 + 繁育 ----------
+const economy = createEconomy({
+  getMultiplier: () => specialize.multiplier(),
+  onGain: () => { if (hud.refreshBio) hud.refreshBio(economy.bio); },
+});
+const specialize = createSpecialize(economy, (id, lv) => {
+  hud.toastKey('lab.specUp', { name: t('spec.' + id), lv });
+  if (hud.refreshBio) hud.refreshBio(economy.bio);
+  if (lab.isOpen) lab.render();
+});
+
 function spawnEggJelly() {
   const j = new Jellyfish(view.W / 2, view.H / 2, 0, {});
   j.r = 64; j.baseR = 64; j.scale = 1;
@@ -104,6 +120,7 @@ function spawnEggJelly() {
 const feeding = createFeeding(baits, (x, y) => {
   audio.bubble();
   stats.fed++;
+  economy.gain(2);   // 投喂产出生物荧光
   achievements.check(stats, { type: 'feed' });
 });
 
@@ -119,9 +136,13 @@ const home = createHome({
     save.reset();
     collection.reset();
     achievements.reset();
+    economy.reset();
+    specialize.reset();
     stats.summoned = 0;
     stats.fed = 0;
     stats.mutations = 0;
+    stats.breeds = 0;
+    if (hud.refreshBio) hud.refreshBio(economy.bio);
     clearWorld();
     seedWorld(null);
     save.markDirty();
@@ -206,6 +227,7 @@ const hud = createHud({
     return on;
   },
   isCurrentMode: () => current.mode,
+  openLab: () => lab.toggle(),
   openSettings: () => settings.toggle(),
 });
 
@@ -214,6 +236,27 @@ const ecosystem = createEcosystem({
   plankton, schools, jellyfish, current,
   onEvent: (k) => hud.toast(k),
 });
+
+// ---------- 阶段六：繁育 + 繁育/专长面板 ----------
+const breeding = createBreeding({
+  jellyfish,
+  cap: () => Math.round(quality.jellyfish * 2.5),
+  getMutateBonus: () => specialize.mutateBonus(),
+  onBreed: (child, info) => {
+    stats.breeds++;
+    economy.gain(10 + (info.hybrid ? 8 : 0) + info.mutated.length * 4);
+    hud.toastKey('lab.bred', {
+      name: t('jelly.' + JELLY_PALETTES[child.paletteIndex].key),
+      tag: info.hybrid ? t('lab.hybrid') : (info.mutated.length ? t('lab.mutatedTrait') : ''),
+    });
+    ripples.push(new Celebrate(child.x, child.y, '180, 235, 255', 200));
+    collection.see(child.paletteIndex, child.traits);
+    if (hud.refreshBio) hud.refreshBio(economy.bio);
+    if (lab.isOpen) lab.render();
+  },
+});
+
+const lab = createLab({ economy, specialize, getBreeds: () => stats.breeds });
 
 // ---------- 设置面板 ----------
 const settings = createSettings({
@@ -411,6 +454,7 @@ const interact = createInteract(canvas, {
       if (mutated) {
         // 变异事件：醒目提示前后配色名 + 扩散光环
         stats.mutations++;
+        economy.gain(6);
         hud.toastKey('jelly.mutated', {
           from: t('jelly.' + JELLY_PALETTES[before].key),
           to: t('jelly.' + j.palette.key),
@@ -420,7 +464,7 @@ const interact = createInteract(canvas, {
         dex.render();
         achievements.check(stats, { type: 'mutation' });
       } else if (!j.egg) {
-        collection.see(j.paletteIndex);
+        collection.see(j.paletteIndex, j.traits);
       }
       save.markDirty();
     }
@@ -541,6 +585,12 @@ scheduler.add({
   update: () => ecosystem.update(dtGlobal, tGlobal),
   draw: (c) => ecosystem.draw(c),
 });
+
+// ---------- 阶段六：繁育检测 ----------
+scheduler.add({
+  id: 'breeding', order: 13,
+  update: () => breeding.update(dtGlobal),
+});
 scheduler.add({
   id: 'holdring', order: 100,
   draw: (c) => {
@@ -639,6 +689,9 @@ function start() {
   hud.refreshTheme();
   hud.refreshAch(achievements.count);
   hud.refreshButtons();
+  if (hud.refreshBio) hud.refreshBio(economy.bio);
+  lab.bind();
+  if (hud.refreshActivity) hud.refreshActivity(false);
 
   // 恢复存档后立即评估一次（例如 déjà 满足的成就）
   achievements.check(stats, { type: 'init' });

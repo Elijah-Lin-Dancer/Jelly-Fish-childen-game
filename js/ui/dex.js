@@ -8,6 +8,7 @@ import { t } from './i18n.js';
 import { collection } from '../core/state.js';
 import { JELLY_PALETTES, Jellyfish } from '../entities/jellyfish.js';
 import { JELLY_KEYS } from './locales.js';
+import { traitLevel } from '../gameplay/genes.js';
 
 export function createDex({ onClose } = {}) {
   const el = {
@@ -148,6 +149,20 @@ export function createDex({ onClose } = {}) {
         meta.innerHTML = `<span class="dim">${t('dex.hint')}</span>`;
       }
       card.appendChild(meta);
+
+      // 阶段六：性状（繁育出的最佳等级）
+      if (found && rec.traits) {
+        const tr = document.createElement('div');
+        tr.className = 'dex-traits';
+        const names = {
+          size: t('trait.size'), glow: t('trait.glow'),
+          speed: t('trait.speed'), tentacles: t('trait.tentacles'),
+        };
+        tr.textContent = Object.keys(names)
+          .map((k) => `${names[k]}${traitLevel(rec.traits[k])}`)
+          .join(' · ');
+        card.appendChild(tr);
+      }
 
       el.grid.appendChild(card);
 

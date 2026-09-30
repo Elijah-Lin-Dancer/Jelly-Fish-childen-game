@@ -7,6 +7,7 @@
 
 import { view, quality } from '../core/state.js';
 import { clamp } from '../core/config.js';
+import { serializeTraits, deserializeTraits } from './genes.js';
 
 const STORAGE_KEY = 'ocean.pond';
 const SAVE_INTERVAL = 3000; // ms
@@ -22,6 +23,7 @@ function serialize(j) {
     n: j.interactions | 0,
     a: Math.round(j.age),
     r: j.rare ? 1 : 0,
+    g: serializeTraits(j.traits),
   };
 }
 
@@ -73,6 +75,8 @@ export function createSave(getJellyfish) {
         interactions: +d.n || 0,
         age: +d.a || 0,
         rare: !!d.r,
+        // 基因（旧存档无 g 时回落到随机性状）
+        genes: d.g ? deserializeTraits(d.g) : undefined,
       }));
   }
 

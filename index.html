@@ -32,11 +32,15 @@
   <div class="ach" id="ach" role="button" tabindex="0" aria-label="Achievements">
     <span>⭐</span><span id="ach-text" data-i18n="ach.label">0/6</span>
   </div>
+  <div class="ach" id="bio" role="button" tabindex="0" aria-label="Bioluminescence">
+    <span>◈</span><span id="bio-text" data-i18n="bio.label">0</span>
+  </div>
 </div>
 
 <div class="hud hud-bottom-right">
   <div class="btn" id="feed-btn" role="button" tabindex="0" data-i18n-title="btn.feed" aria-label="Feed">🫧</div>
   <div class="btn" id="current-btn" role="button" tabindex="0" data-i18n-title="btn.current" aria-label="Currents">🌊</div>
+  <div class="btn" id="lab-btn" role="button" tabindex="0" data-i18n-title="btn.lab" aria-label="Breeding lab">❖</div>
   <div class="btn" id="nest-btn" role="button" tabindex="0" data-i18n-title="btn.nest" aria-label="Bring home">🎯</div>
   <div class="btn" id="share-btn" role="button" tabindex="0" data-i18n-title="btn.share" aria-label="Share">📸</div>
   <div class="btn" id="theme-btn" role="button" tabindex="0" data-i18n-title="btn.theme" aria-label="Theme">🌗</div>
@@ -69,6 +73,20 @@
       <div class="settings-label" id="settings-sound-label">Sound</div>
       <div class="switch" id="settings-sound" role="switch" tabindex="0" aria-label="Sound"><span class="knob"></span></div>
     </div>
+  </div>
+</div>
+
+<div class="dex-modal hide" id="lab-modal">
+  <div class="dex-panel lab-panel">
+    <div class="dex-head">
+      <div class="dex-head-title" id="lab-title">Breeding Lab</div>
+      <div class="dex-close" id="lab-close" role="button" tabindex="0" aria-label="Close">✕</div>
+    </div>
+    <div class="lab-stats">
+      <span class="lab-stat" id="lab-bio"></span>
+      <span class="lab-stat" id="lab-breeds"></span>
+    </div>
+    <div class="lab-spec-list" id="lab-spec-list"></div>
   </div>
 </div>
 

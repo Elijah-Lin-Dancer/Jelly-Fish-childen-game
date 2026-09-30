@@ -695,3 +695,58 @@ html.reduce-motion .coach { transition: none; }
 
 /* 阶段五：洋流模式 */
 body.current-mode #ocean-canvas { cursor: crosshair; }
+
+/* 阶段六：繁育实验室 */
+.lab-panel { max-width: 460px; }
+.lab-stats {
+  display: flex;
+  gap: 16px;
+  padding: 0 22px 12px;
+  font-size: 13px;
+  opacity: 0.85;
+  flex-wrap: wrap;
+}
+.lab-stat { white-space: nowrap; }
+.lab-spec-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 22px 22px;
+}
+.lab-spec {
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.lab-spec.maxed { border-color: rgba(255, 216, 77, 0.5); }
+.lab-spec-head { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.lab-spec-icon { font-size: 16px; }
+.lab-spec-name { flex: 1; font-weight: 600; }
+.lab-spec-lv { font-size: 12px; opacity: 0.75; }
+.lab-spec-desc { font-size: 12px; opacity: 0.7; margin: 6px 0 10px; }
+.lab-buy {
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  background: rgba(40, 115, 185, 0.8);
+  border: 1px solid rgba(150, 210, 255, 0.5);
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+.lab-buy:hover { background: rgba(50, 135, 210, 0.95); transform: scale(1.03); }
+.lab-buy.disabled { opacity: 0.42; cursor: not-allowed; }
+.lab-buy.maxed {
+  background: rgba(255, 216, 77, 0.16);
+  border-color: rgba(255, 216, 77, 0.5);
+  cursor: default;
+}
+
+/* 图鉴：性状行 */
+.dex-traits {
+  font-size: 11px;
+  opacity: 0.72;
+  margin-top: 4px;
+  letter-spacing: 0.2px;
+}
