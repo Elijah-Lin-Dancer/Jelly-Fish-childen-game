@@ -46,7 +46,7 @@ import { createBuildPad } from './ui/buildPad.js';
 import { createWorldPanel } from './ui/createWorld.js';
 import { Bogyo } from './entities/bogyo.js';
 import { dailyRareIndex } from './gameplay/daily.js';
-import { Jellyfish, JELLY_PALETTES } from './entities/jellyfish.js';
+import { Jellyfish, JELLY_PALETTES, weightedPaletteIndex } from './entities/jellyfish.js';
 import { FishSchool } from './entities/fish.js';
 import { Turtle } from './entities/turtle.js';
 import { Whale } from './entities/whale.js';
@@ -171,6 +171,14 @@ const world = {
 let companionVariantId = 'lucy';
 let companion = null;
 let starterKit = false;
+
+/**
+ * 阶段十：按当前群系的物种权重随机挑一个配色下标。
+ * 各群系偏好不同水母（如珊瑚礁偏暖、极地冰海偏蓝）。
+ */
+function pickPalette(exclude) {
+  return weightedPaletteIndex((i) => world.speciesWeight(i), exclude);
+}
 
 /** 生成/替换伴随水母（玩家身份标识，跟随光标） */
 function spawnCompanion(variant) {
@@ -714,7 +722,8 @@ function seedWorld(keepJelly) {
 
   const jn = keepJelly && keepJelly.length ? 0 : quality.jellyfish;
   for (let i = 0; i < jn; i++) {
-    jellyfish.push(new Jellyfish());
+    // 阶段十：按群系权重选色，让每个世界的水母构成不同
+    jellyfish.push(new Jellyfish(undefined, undefined, pickPalette()));
   }
   if (keepJelly) {
     for (const j of keepJelly) jellyfish.push(j);
@@ -821,7 +830,7 @@ function maybeAnnounceRare() {
 function spawnJellyfish(x, y, juvenile) {
   const cap = quality.jellyfish * 2.5;
   if (jellyfish.length > cap) jellyfish.shift();
-  const j = new Jellyfish(x, y, undefined, {
+  const j = new Jellyfish(x, y, pickPalette(), {
     juvenile,
     // 冒险模式：水母可通过进食长得更大
     growthCap: mode.isAdventure() ? 2.0 : 1.0,
@@ -968,7 +977,8 @@ const interact = createInteract(canvas, {
       }
       unlockJelly(j);
       const before = j.paletteIndex;
-      const mutated = j.interact();
+      // 阶段十：变异也遵循群系权重（更容易变成该群系偏好的物种）
+      const mutated = j.interact((i) => world.speciesWeight(i));
       if (mutated) {
         // 变异事件：醒目提示前后配色名 + 扩散光环
         stats.mutations++;

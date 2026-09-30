@@ -17,6 +17,44 @@ export const JELLY_PALETTES = [
   { key: 'yellow', core: '#fff0a8', glow: '#ffd84d', tent: '#fff5c2' },
 ];
 
+/**
+ * 按权重随机选一个调色板下标（阶段十：群系专属物种刷新）。
+ * @param {(idx:number)=>number} weightFn 返回下标 idx 的权重（≤0 视为 0）
+ * @param {(idx:number)=>boolean} [exclude] 可选：排除某下标
+ * 全部权重 ≤0 时回退为均匀随机。
+ */
+export function weightedPaletteIndex(weightFn, exclude) {
+  const n = JELLY_PALETTES.length;
+  const w = new Array(n).fill(1);
+  if (typeof weightFn === 'function') {
+    for (let i = 0; i < n; i++) {
+      const v = +weightFn(i);
+      w[i] = (isFinite(v) && v > 0) ? v : 0;
+      if (exclude && exclude(i)) w[i] = 0;
+    }
+  } else if (exclude) {
+    for (let i = 0; i < n; i++) if (exclude(i)) w[i] = 0;
+  }
+  let total = 0;
+  for (let i = 0; i < n; i++) total += w[i];
+  if (total <= 0) {
+    // 回退：均匀随机（尊重 exclude）
+    let idx;
+    let guard = 0;
+    do {
+      idx = (Math.random() * n) | 0;
+      guard++;
+    } while (exclude && exclude(idx) && guard < 40);
+    return idx;
+  }
+  let r = Math.random() * total;
+  for (let i = 0; i < n; i++) {
+    r -= w[i];
+    if (r <= 0) return i;
+  }
+  return n - 1;
+}
+
 export class Jellyfish {
   constructor(x, y, paletteIndex, opts = {}) {
     this.x = x ?? rand(view.W * 0.05, view.W * 0.95);
@@ -126,15 +164,20 @@ export class Jellyfish {
   }
 
   /** 变异：换一种配色 + 触须加两根 */
-  mutate() {
+  mutate(weightFn) {
     if (this.mutated) return false;
     this.mutated = true;
-    let idx = this.paletteIndex;
-    while (idx === this.paletteIndex && JELLY_PALETTES.length > 1) {
-      idx = (Math.random() * JELLY_PALETTES.length) | 0;
-    }
-    this.paletteIndex = idx;
-    this.palette = JELLY_PALETTES[idx];
+    const next = (typeof weightFn === 'function')
+      ? weightedPaletteIndex(weightFn, (i) => i === this.paletteIndex)
+      : (() => {
+          let idx = this.paletteIndex;
+          while (idx === this.paletteIndex && JELLY_PALETTES.length > 1) {
+            idx = (Math.random() * JELLY_PALETTES.length) | 0;
+          }
+          return idx;
+        })();
+    this.paletteIndex = next;
+    this.palette = JELLY_PALETTES[next];
     this.tentacles.push(
       { len: rand(this.r * 1.2, this.r * 2.6), phase: rand(0, TAU), freq: rand(0.02, 0.05), amp: rand(4, 12), width: rand(1.2, 2.6) },
       { len: rand(this.r * 1.2, this.r * 2.6), phase: rand(0, TAU), freq: rand(0.02, 0.05), amp: rand(4, 12), width: rand(1.2, 2.6) }
@@ -145,10 +188,10 @@ export class Jellyfish {
   }
 
   /** 一次互动（点击命中） */
-  interact() {
+  interact(weightFn) {
     this.interactions++;
     this.flash = 1;
-    if (this.interactions >= 5 && !this.mutated) return this.mutate();
+    if (this.interactions >= 5 && !this.mutated) return this.mutate(weightFn);
     return false;
   }
 
