@@ -283,10 +283,18 @@ export function createTerrainLayer() {
       ctx.save();
       ctx.beginPath();
       let landStarted = false;
+      // 记录陆地多边形的实际纵向跨度（屏幕坐标）。
+      // 渐变必须贴着这段真实范围铺，不能写死成 view.H * 0.5 ——
+      // 那样陆地一旦超过半屏，下面的部分就全落在最后一个色标上，
+      // 变成一块毫无层次的纯色矩形（与原水线的沙色割裂，非常突兀）。
+      let landTop = Infinity;
+      let landBot = -Infinity;
       for (let i = 0; i < cols; i++) {
         const wx = wxs[i];
         const sl = tp.shoreLineAt(wx);
         const sy = (sl - camera.y) * scale;
+        if (sy < landTop) landTop = sy;
+        if (sy > landBot) landBot = sy;
         if (!landStarted) { ctx.moveTo(sxs[i], sy); landStarted = true; }
         else ctx.lineTo(sxs[i], sy);
       }
@@ -294,12 +302,24 @@ export function createTerrainLayer() {
       ctx.lineTo(view.W, -view.H);
       ctx.lineTo(0, -view.H);
       ctx.closePath();
-      const landGrad = ctx.createLinearGradient(0, 0, 0, view.H * 0.5);
-      // 沙色随主题微调（深海主题的岸边更灰冷）
+      // 陆地是「从屏幕顶部一路铺到水线」的一整块。
+      // 渐变端点必须贴合它的真实纵向范围：
+      //   gradBot = 水线所在位置（多边形最低点），
+      //   gradTop = 屏幕顶部（-view.H 是为了在相机深入内陆时也够远）。
+      // 之前写死 view.H * 0.5，导致陆地超过半屏后全落在最后一个色标上，
+      // 变成一块没有层次的纯色矩形。
+      const gradTop = Math.min(landTop, 0) - view.H;
+      const gradBot = Math.max(landBot, 1);
+      const landGrad = ctx.createLinearGradient(0, gradTop, 0, gradBot);
+      // 色标语义：0 = 最内陆（暗），1 = 紧贴水线（亮）。
+      // 暖沙色集中在最后 15% 的窄带里 —— 现实中也是靠水的沙最亮、
+      // 越往内陆越被植被和阴影压暗。若把暖色点铺到 0.5 以上，
+      // 整片陆地会糊成均匀的沙黄，正是之前那种"突兀矩形"的观感。
       const warm = theme.name === 'shallow';
-      landGrad.addColorStop(0, warm ? 'rgba(58, 66, 62, 1)' : 'rgba(30, 38, 44, 1)');
-      landGrad.addColorStop(0.55, warm ? 'rgba(196, 176, 132, 1)' : 'rgba(140, 134, 116, 1)');
-      landGrad.addColorStop(1, warm ? 'rgba(226, 208, 160, 1)' : 'rgba(168, 162, 142, 1)');
+      landGrad.addColorStop(0, warm ? 'rgba(58, 62, 58, 1)' : 'rgba(28, 34, 40, 1)');
+      landGrad.addColorStop(0.45, warm ? 'rgba(92, 90, 76, 1)' : 'rgba(58, 62, 64, 1)');
+      landGrad.addColorStop(0.85, warm ? 'rgba(158, 144, 112, 1)' : 'rgba(116, 112, 100, 1)');
+      landGrad.addColorStop(1, warm ? 'rgba(214, 196, 152, 1)' : 'rgba(160, 154, 136, 1)');
       ctx.fillStyle = landGrad;
       ctx.fill();
       ctx.restore();

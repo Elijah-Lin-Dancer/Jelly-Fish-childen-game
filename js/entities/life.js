@@ -788,8 +788,10 @@ export class Pier {
 
 // 每类元素的「带偏好」与数量。数量会按 quality 分级缩水。
 //  land:true 表示「岸上元素」—— 采样后要吸附到水线以上的陆地（见 pushAshore）。
-//  ahead 是期望离水线多远（世界单位），决定它站在沙滩外缘还是内陆：
-//    贝壳/海鸥在滩涂最外缘，遮阳伞在中段，棕榈/灯塔/栈桥更靠内陆。
+//  ahead 决定它站在岸上的纵深层次：值越大越靠内陆。
+//  世界为竖屏预留了很长的陆地纵深（WORLD.y0 = -1100），pushAshore 会按
+//  ahead 的比例继续往内陆推进，所以数值要拉开档次，否则所有元素会挤在
+//  水线附近的一条窄带里（见 pushAshore 里「深入内陆」那段的说明）。
 const PLAN = {
   swimmer:   { band: 'shallow',   n: 5,  land: false },
   child:     { band: 'shallow',   n: 3,  land: false },
@@ -797,10 +799,10 @@ const PLAN = {
   boat:      { band: 'nearshore', n: 3,  land: false },
   seagull:   { band: 'beach',     n: 4,  land: true,  ahead: 40 },
   shell:     { band: 'beach',     n: 6,  land: true,  ahead: 30 },
-  umbrella:  { band: 'beach',     n: 4,  land: true,  ahead: 120 },
-  palm:      { band: 'land',      n: 4,  land: true,  ahead: 200 },
-  lighthouse:{ band: 'land',      n: 2,  land: true,  ahead: 260 },
   pier:      { band: 'beach',     n: 2,  land: true,  ahead: 20 },
+  umbrella:  { band: 'beach',     n: 4,  land: true,  ahead: 130 },
+  palm:      { band: 'land',      n: 4,  land: true,  ahead: 240 },
+  lighthouse:{ band: 'land',      n: 2,  land: true,  ahead: 320 },
 };
 
 const CTORS = {
@@ -847,17 +849,55 @@ function pushAshore(terrain, x, y, ahead) {
   // 12 步（每步 ahead）在陡岸处推不进去。步长同时随失败次数放大，
   // 保证越推越远、尽早收敛，而不是原地打转。
   let px = x, py = y;
+  let hit = false;
   for (let i = 0; i < 24; i++) {
     const stepLen = ahead * (1 + i * 0.16);
     px += dx * stepLen;
     py += dy * stepLen;
-    if (terrain.depthAt(px, py) < 0) return clampToWorld(px, py);
+    if (terrain.depthAt(px, py) < 0) { hit = true; break; }
     // 推过头跑到世界外了，立刻回退
     if (px < WORLD.x0 || px > WORLD.x1 || py < WORLD.y0 || py > WORLD.y1) break;
   }
-  // 兜底：整体回退到世界内的一个陆地密集区（水线内侧一小段）
-  const sl = terrain.shoreLineAt(x);
-  return clampToWorld(x, sl - ahead);
+  if (!hit) {
+    // 兜底：整体回退到世界内的一个陆地密集区（水线内侧一小段）
+    const sl = terrain.shoreLineAt(x);
+    px = x;
+    py = sl - ahead;
+  }
+
+  // ---- 深入内陆 ----
+  // 只跨过水线是不够的。世界为竖屏预留了很长的陆地纵深
+  // （WORLD.y0 = -1100，见 terrain.js 顶部 ⑤），而"跨过水线就停"
+  // 会让所有岸上元素挤在水线上方几十像素的一条窄带里 ——
+  // 相机一屏能看到 1296 世界单位的高度，元素却只占了最前面 ~200，
+  // 于是玩家看到的是"一片几乎空的沙滩 + 挤成一条线的伞和树"。
+  //
+  // 关键：目标是「离水线的绝对距离」，不是「相对当前点再走多远」。
+  // 如果按增量推，起点在 beach 带的遮阳伞（ahead 130）会比起点在 land
+  // 带的灯塔（ahead 320）更靠内陆，层次就反了 —— 实测遮阳伞到 -911、
+  // 灯塔才 -409。改成绝对距离后，ahead 直接表达"这一类的纵深档位"，
+  // 与它在哪个带被采样无关。
+  const sl0 = terrain.shoreLineAt(px);
+  const uphillMax = (sl0 - WORLD.y0) * 0.55;      // 可用的内陆纵深
+  const want = Math.min(ahead, uphillMax);        // 离水线的绝对目标距离
+  const curUp = sl0 - py;                         // 当前已深入多少
+  const remain = Math.max(0, want - curUp);       // 还差多少
+  // 分步走完，每一步都要求仍是陆地（避免走进内陆湖或穿出岛外）
+  const STEPS = 10;
+  for (let k = 0; k < STEPS; k++) {
+    const nx = px + dx * (remain / STEPS);
+    const ny = py + dy * (remain / STEPS);
+    if (ny < WORLD.y0 + 8 || nx < WORLD.x0 + 8 || nx > WORLD.x1 - 8) break;
+    if (terrain.depthAt(nx, ny) >= 0) break;
+    px = nx;
+    py = ny;
+  }
+
+  // 注意：这里不再额外用 shoreLineAt 做"是否在水线以上"的修正。
+  // depthAt(x,y) < 0 本身就是权威判据 —— 它内部按 landHeightAt 判定，
+  // 与地形渲染同源。shoreLineAt 只是水线基准线，逐列起伏，
+  // 拿它二次判会与 depthAt 打架，反而把已经在岸上的元素往回推。
+  return clampToWorld(px, py);
 }
 
 /**
