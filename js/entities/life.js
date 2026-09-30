@@ -586,12 +586,18 @@ export class Seagull {
     const r = makeRng((seed || '') + ':sg' + x.toFixed(0)).rng;
     this.x = x;
     this.y = y;
+    this.homeX = x;                      // 巡航锚点（见 update 里的往返约束）
     this.scale = rangeFrom(r, 0.85, 1.2);
     this.vx = rangeFrom(r, 0.5, 1.1) * (r() < 0.5 ? 1 : -1);
     this.dir = this.vx > 0 ? 1 : -1;
     this.phase = rangeFrom(r, 0, TAU);
     this.flee = makeReaction(1600);
     this.vy = 0;
+    // 往返半径：海鸥绕着投放点来回飞，而不是永远朝一个方向漂。
+    // 不设这个约束的话，它会在几十秒内飘出上千单位，横越岸线的弯曲处 ——
+    // 于是原本站在沙滩上的海鸥会「飘」到开阔水面上方（实测 x 从 1497
+    // 漂到 1277，depth 由 -20 变 +38）。鸟绕着自己的领地打转也更像真的。
+    this.range = rangeFrom(r, 260, 520);
   }
 
   update(dt) {
@@ -606,6 +612,10 @@ export class Seagull {
       this.x += this.vx * k;
       if (this.y > WORLD.y0 + 60) this.y -= 0.06 * k;  // 缓缓回到水面附近
       this.vy *= 0.92;
+      // 到达巡航半径就掉头，保证始终在投放点附近的岸线上方
+      const dx = this.x - this.homeX;
+      if (dx > this.range) { this.vx = -Math.abs(this.vx); this.dir = -1; }
+      else if (dx < -this.range) { this.vx = Math.abs(this.vx); this.dir = 1; }
     }
     if (this.x < WORLD.x0 - 80) this.x = WORLD.x1 + 80;
     if (this.x > WORLD.x1 + 80) this.x = WORLD.x0 - 80;
@@ -842,6 +852,19 @@ function pushAshore(terrain, x, y, ahead) {
     const L = Math.hypot(vx, vy) || 1;
     dx = vx / L;
     dy = vy / L;
+  } else {
+    // slope 地形的岸线是「斜」的：shoreBaseAt 里带 (x - sx0) * slopeA 的
+    // 线性倾斜。若还按 (0,-1) 垂直上推，推进方向与坡面法向偏了一个
+    // 夹角，元素会沿坡面横向漂移，最终落在水线以下 —— 实测 desktop/slope
+    // 有 1 个岸上元素入水（本地种子恰好没踩到，线上种子才暴露）。
+    // 因此这里用岸线的局部斜率求法向，让推进方向始终垂直于岸线。
+    const eps = 24;
+    const kSlope = (terrain.shoreLineAt(x + eps) - terrain.shoreLineAt(x - eps)) / (2 * eps);
+    // 岸线法向：岸线切向是 (1, k)，法向取 (-k, -1)（-1 指向内陆，即 y 减小侧）
+    const nx0 = -kSlope, ny0 = -1;
+    const L = Math.hypot(nx0, ny0) || 1;
+    dx = nx0 / L;
+    dy = ny0 / L;
   }
 
   // 沿着这个方向逐步推进，直到进入陆地。
@@ -865,38 +888,41 @@ function pushAshore(terrain, x, y, ahead) {
     py = sl - ahead;
   }
 
-  // ---- 深入内陆 ----
-  // 只跨过水线是不够的。世界为竖屏预留了很长的陆地纵深
-  // （WORLD.y0 = -1100，见 terrain.js 顶部 ⑤），而"跨过水线就停"
-  // 会让所有岸上元素挤在水线上方几十像素的一条窄带里 ——
-  // 相机一屏能看到 1296 世界单位的高度，元素却只占了最前面 ~200，
-  // 于是玩家看到的是"一片几乎空的沙滩 + 挤成一条线的伞和树"。
+  // ---- 定位到目标深度 ----
+  // 目标深度由 ahead 直接映射：ahead 越小、越贴水线；越大、越靠内陆。
+  //   seagull(40) 约 -88 / shell(30) 约 -81 / umbrella(130) 约 -150
+  //   palm(240) 约 -228 / lighthouse(320) 约 -284
   //
-  // 关键：目标是「离水线的绝对距离」，不是「相对当前点再走多远」。
-  // 如果按增量推，起点在 beach 带的遮阳伞（ahead 130）会比起点在 land
-  // 带的灯塔（ahead 320）更靠内陆，层次就反了 —— 实测遮阳伞到 -911、
-  // 灯塔才 -409。改成绝对距离后，ahead 直接表达"这一类的纵深档位"，
-  // 与它在哪个带被采样无关。
+  // 实现上的关键选择：不再按"方向 + 经验步长"迭代，而是**沿 y 向上做扫描**。
+  // 原因：按方向推进依赖岸线法向的正确性，而岸线在弯曲处（尤其 shore 的
+  // 正弦+fbm 扰动、island 的 islWobble）法向会失真，实测 756 个元素里有
+  // 2 个海鸥会因此卡在水里出不来。而 depthAt 关于 y 在近岸是单调的
+  // （越往内陆越负），所以直接向上扫描求"第一个达到目标深度的 y"就够，
+  // 既与 x 方向的岸线形状解耦，也不需要收敛假设。
+  //
+  // 扫描从一个保证在水下的起点开始，逐步向上，取首个 depth <= targetDepth
+  // 的位置。找不到（该列根本没有这么深的陆地，例如窄岛）就退回"刚出水"的点。
   const sl0 = terrain.shoreLineAt(px);
-  const uphillMax = (sl0 - WORLD.y0) * 0.55;      // 可用的内陆纵深
-  const want = Math.min(ahead, uphillMax);        // 离水线的绝对目标距离
-  const curUp = sl0 - py;                         // 当前已深入多少
-  const remain = Math.max(0, want - curUp);       // 还差多少
-  // 分步走完，每一步都要求仍是陆地（避免走进内陆湖或穿出岛外）
-  const STEPS = 10;
-  for (let k = 0; k < STEPS; k++) {
-    const nx = px + dx * (remain / STEPS);
-    const ny = py + dy * (remain / STEPS);
-    if (ny < WORLD.y0 + 8 || nx < WORLD.x0 + 8 || nx > WORLD.x1 - 8) break;
-    if (terrain.depthAt(nx, ny) >= 0) break;
-    px = nx;
-    py = ny;
+  const targetDepth = -(60 + ahead * 0.7);
+  const step = 12;
+  const maxSteps = Math.ceil(((sl0 - WORLD.y0) + 600) / step);
+  let chosen = null;      // 首个达到目标深度的点
+  let firstLand = null;   // 首个进入陆地的点（兜底）
+  for (let i = 0; i <= maxSteps; i++) {
+    const ny = py - i * step;
+    if (ny < WORLD.y0 + 8) break;
+    const d = terrain.depthAt(px, ny);
+    if (d < 0 && !firstLand) firstLand = ny;
+    if (d <= targetDepth) { chosen = ny; break; }
+  }
+  if (chosen != null) {
+    py = chosen;
+  } else if (firstLand != null) {
+    // 这一列没有足够深的陆地（窄岛/陡岸），退到刚出水的位置，
+    // 再往里走一点，确保不压在浪线上
+    py = Math.max(WORLD.y0 + 8, firstLand - 30);
   }
 
-  // 注意：这里不再额外用 shoreLineAt 做"是否在水线以上"的修正。
-  // depthAt(x,y) < 0 本身就是权威判据 —— 它内部按 landHeightAt 判定，
-  // 与地形渲染同源。shoreLineAt 只是水线基准线，逐列起伏，
-  // 拿它二次判会与 depthAt 打架，反而把已经在岸上的元素往回推。
   return clampToWorld(px, py);
 }
 
