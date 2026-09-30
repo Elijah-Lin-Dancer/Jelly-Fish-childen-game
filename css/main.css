@@ -222,6 +222,20 @@ body {
   box-shadow: 0 0 16px rgba(255, 216, 77, 0.35);
 }
 
+/* ===== 矢量图标（不依赖 emoji 字体） ===== */
+.ic {
+  width: 20px;
+  height: 20px;
+  display: block;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ic-hi { fill: currentColor; stroke: none; }
+
 /* ===== Toast ===== */
 .toast {
   position: fixed;
