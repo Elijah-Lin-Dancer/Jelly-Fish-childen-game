@@ -25,10 +25,35 @@ export const camera = {
   tx: 0, // 缓动目标
   ty: 0,
   scale: 1,
+  // 可见世界宽高。必须在这里就给初值 —— 相机 resize 之前任何读取
+  // 拿到 undefined 都会把 NaN 带进渲染管线。
+  vw: 6000,
+  vh: 1120,
+  /** 拖视角期间为 true（实体据此决定是否追指针） */
+  dragging: false,
 };
 
 /** 键盘移动意图（-1..1），由 main.js 的键盘监听写入 */
 export const camInput = { x: 0, y: 0 };
+
+// ---- 坐标换算（数据版）----
+// 实体需要「屏幕 → 世界」换算，但它们不该依赖 camera 实例（会引入循环依赖，
+// 也让实体难以在无相机的环境里单测）。这几个纯函数只读 camera 的字段。
+export function screenToWorldX(sx) {
+  const sc = camera.scale || 1;
+  return sx / sc + camera.x;
+}
+export function screenToWorldY(sy) {
+  const sc = camera.scale || 1;
+  return sy / sc + camera.y;
+}
+export function screenToWorld(sx, sy) {
+  return { x: screenToWorldX(sx), y: screenToWorldY(sy) };
+}
+/** 「半径换算」：屏幕上 R 像素对应多少世界单位 */
+export function screenRadius(r) {
+  return r / (camera.scale || 1);
+}
 
 /** 相机平移速度（世界单位 / 秒） */
 export const CAM_SPEED = 620;
