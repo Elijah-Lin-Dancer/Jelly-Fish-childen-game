@@ -192,9 +192,14 @@ const terrain = {
   homePoint() { return terrainRef.current.homePoint(); },
 };
 
-// 调试 / 自动化测试用的只读探针。
-// 无头浏览器里没法靠肉眼看画面判断相机有没有走动，这里挂一个显式的自检入口。
-// 只暴露状态快照，不提供任何写操作 —— 生产运行时它就是个普通对象。
+// 调试 / 自动化测试探针。
+//
+// 为什么需要它：相机与地形都是纯数据驱动，无头浏览器里没法靠肉眼看画面
+// 判断「视角到底走没走动」「地形到底切没切换」。挂一个显式入口后，
+// 自动化测试就能断言 camera.x 是否推进、depthAt 是否随种子变化 ——
+// 11A 期间正是靠它发现 camera.x 静默变成 NaN（画面正常但世界锁死）。
+//
+// 只读 + 一个切地形入口，生产运行时它就是个普通对象，不参与任何游戏逻辑。
 if (typeof window !== 'undefined') {
   window.__ocean = {
     get camera() {
@@ -207,7 +212,7 @@ if (typeof window !== 'undefined') {
     bandAt(x, y) { const b = bandOf(terrainRef.current.depthAt(x, y)); return { id: b.id, key: b.key }; },
     depthAt(x, y) { return terrainRef.current.depthAt(x, y); },
     get home() { return terrainRef.current.homePoint(); },
-    /** 仅测试用：切地形并回到该地形的家（创建面板将来会走同一条路径） */
+    /** 切地形并回到该地形的家。11B 的「新建世界」面板会走同一条路径。 */
     setTerrain(type, seed) {
       setTerrain(type, seed);
       goHome(true);
@@ -815,11 +820,19 @@ function seedWorld(keepJelly) {
   // spawnSpot 会在指定水深带里找点，找不到就退化为可见范围内的水域点。
   const vr = cam.visibleRect(120);
 
+  // 第一屏的内容密度：实体不能均匀撒满整个可见区。
+  // 竖屏的可见高度 1217 已经覆盖世界全高，均匀撒点会把水母摊薄到看不见 ——
+  // 玩家进场看到空海会以为游戏坏了。这里给纵向加一个向中心收拢的权重，
+  // 让出生点集中在「相机中心附近」的一带（占可见高约 62%），横向仍铺满。
+  const spawnH = vr.h * 0.62;
+  const spawnY0 = vr.y0 + (vr.h - spawnH) * 0.5;
+
   function spawnSpot(bandId, pad) {
     // 优先在可见范围内生成，保证一进场就能看到内容
     for (let i = 0; i < 24; i++) {
-      const x = rand(vr.x0 - (pad || 0), vr.x1 + (pad || 0));
-      const y = rand(vr.y0 - (pad || 0), vr.y1 + (pad || 0));
+      const pd = pad || 0;
+      const x = rand(vr.x0 - pd, vr.x1 + pd);
+      const y = rand(spawnY0 - pd * 0.4, spawnY0 + spawnH + pd * 0.4);
       if (terrain.depthAt(x, y) > 20) return { x, y };
     }
     // 兜底：用采样器在整个世界里找该水深带
