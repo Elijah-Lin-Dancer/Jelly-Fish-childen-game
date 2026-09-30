@@ -355,6 +355,8 @@ const modeSelect = createModeSelect({
     save.markDirty();
     save.write();
     hud.refreshZone && hud.refreshZone(zones.label);
+    // 选完模式再启动首次引导
+    coach.start();
   },
 });
 
@@ -1002,11 +1004,12 @@ function start() {
 
   // 首次进入引导（只显示一次），在进入池塘后弹出
   home.onEnter(() => {
-    // 阶段八：全新池塘 → 先让玩家选模式（MC 式）
+    // 阶段八：全新池塘 → 先让玩家选模式（MC 式），选完再启动引导
     if (isFreshPond) {
       modeSelect.show();
+    } else {
+      coach.start();
     }
-    coach.start();
     maybeAnnounceRare();
   });
 
