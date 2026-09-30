@@ -20,6 +20,8 @@ import { createBackground, createLightRays, createWaterSurface, createDepthHaze 
 import { createDayNight } from './systems/dayNight.js';
 import { createFeeding } from './systems/feeding.js';
 import { createActivity } from './systems/activity.js';
+import { createCurrent } from './systems/current.js';
+import { createEcosystem } from './systems/ecosystem.js';
 import { createCollection } from './gameplay/collection.js';
 import { createSave } from './gameplay/save.js';
 import { createAchievements } from './gameplay/achievements.js';
@@ -152,6 +154,9 @@ const activity = createActivity(() => jellyfish, {
   onStateChange: (s) => hud.refreshActivity(s === 'active'),
 });
 
+// ---------- 洋流系统（阶段五 · 4.1） ----------
+const current = createCurrent();
+
 // ---------- HUD ----------
 /** 统一的声音开关（HUD 按钮与设置面板共用），返回最新状态 */
 function toggleSound() {
@@ -193,7 +198,21 @@ const hud = createHud({
     activity.toggle();
     hud.refreshButtons();
   },
+  toggleCurrent: () => {
+    const on = current.toggle();
+    document.body.classList.toggle('current-mode', on);
+    if (on) hud.toast('btn.current');
+    hud.refreshButtons();
+    return on;
+  },
+  isCurrentMode: () => current.mode,
   openSettings: () => settings.toggle(),
+});
+
+// ---------- 生态系统 / 温和大鱼（阶段五 · 4.2） ----------
+const ecosystem = createEcosystem({
+  plankton, schools, jellyfish, current,
+  onEvent: (k) => hud.toast(k),
 });
 
 // ---------- 设置面板 ----------
@@ -410,6 +429,9 @@ const interact = createInteract(canvas, {
   onHold: (x, y) => {
     spawnJellyfish(x, y, true);
   },
+  onDrag: (x, y, dx, dy) => {
+    if (current.mode) current.push(x, y, dx, dy);
+  },
 });
 
 // 音频解锁：挂 window，任意首次交互都生效
@@ -461,6 +483,10 @@ scheduler.add({
   update: () => {
     for (const j of jellyfish) {
       j.update(dtGlobal, tGlobal);
+      // 阶段五：洋流对水母施加力（浮力 / 惯性手感）
+      const cur = current.sample(j.x, j.y, tGlobal);
+      j.vx += cur.vx * 0.8 * (dtGlobal / 16.667);
+      j.vy += cur.vy * 0.8 * (dtGlobal / 16.667);
       // 靠近饵料时轻微聚集
       const b = feeding.nearest(j.x, j.y);
       if (b) {
@@ -502,6 +528,18 @@ scheduler.add({
   id: 'activity', order: 90,
   update: () => activity.update(dtGlobal),
   draw: (c) => activity.draw(c),
+});
+
+// ---------- 阶段五：洋流 + 生态系统 ----------
+scheduler.add({
+  id: 'current', order: 6,
+  update: () => current.update(dtGlobal),
+  draw: (c) => current.draw(c),
+});
+scheduler.add({
+  id: 'ecosystem', order: 12,
+  update: () => ecosystem.update(dtGlobal, tGlobal),
+  draw: (c) => ecosystem.draw(c),
 });
 scheduler.add({
   id: 'holdring', order: 100,

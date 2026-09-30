@@ -99,6 +99,10 @@ body {
   color: var(--accent);
   opacity: 0.95;
 }
+.hud-top-left .hint.current {
+  color: #bfe9ff;
+  opacity: 0.95;
+}
 
 /* 右上：图鉴 + 时段 */
 .hud-top-right {
@@ -688,3 +692,6 @@ html.reduce-motion .btn,
 html.reduce-motion .toast,
 html.reduce-motion .home,
 html.reduce-motion .coach { transition: none; }
+
+/* 阶段五：洋流模式 */
+body.current-mode #ocean-canvas { cursor: crosshair; }

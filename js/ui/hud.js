@@ -16,6 +16,7 @@ export function createHud(actions) {
     toast: document.getElementById('toast'),
     hint: document.getElementById('hint'),
     feedBtn: document.getElementById('feed-btn'),
+    currentBtn: document.getElementById('current-btn'),
     themeBtn: document.getElementById('theme-btn'),
     soundBtn: document.getElementById('sound-btn'),
     langBtn: document.getElementById('lang-btn'),
@@ -84,9 +85,11 @@ export function createHud(actions) {
 
   function refreshButtons() {
     if (el.feedBtn) el.feedBtn.classList.toggle('active', !!actions.isFeedMode && actions.isFeedMode());
+    if (el.currentBtn) el.currentBtn.classList.toggle('active', !!actions.isCurrentMode && actions.isCurrentMode());
     if (el.langBtn) el.langBtn.textContent = app.lang === 'zh' ? '中' : 'EN';
     if (el.dnBtn) el.dnBtn.classList.toggle('muted', !dayNight.enabled);
     if (el.hint) el.hint.classList.toggle('feed', !!actions.isFeedMode && actions.isFeedMode());
+    if (el.hint) el.hint.classList.toggle('current', !!actions.isCurrentMode && actions.isCurrentMode());
   }
 
   function refreshLang() {
@@ -97,6 +100,7 @@ export function createHud(actions) {
     if (el.langBtn) el.langBtn.addEventListener('click', () => actions.toggleLang());
     if (el.themeBtn) el.themeBtn.addEventListener('click', () => actions.toggleTheme());
     if (el.feedBtn) el.feedBtn.addEventListener('click', () => actions.toggleFeed());
+    if (el.currentBtn) el.currentBtn.addEventListener('click', () => actions.toggleCurrent && actions.toggleCurrent());
     if (el.dnBtn) el.dnBtn.addEventListener('click', () => actions.toggleDayNight());
     if (el.nestBtn) el.nestBtn.addEventListener('click', () => actions.toggleActivity && actions.toggleActivity());
     if (el.shareBtn) el.shareBtn.addEventListener('click', () => actions.share && actions.share());

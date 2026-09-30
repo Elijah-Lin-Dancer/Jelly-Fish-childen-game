@@ -12,7 +12,7 @@ import { pointer } from '../core/state.js';
 const HOLD_MS = 500;
 
 export function createInteract(canvas, handlers) {
-  const { onHold, onTap, onMoveStart, onMoveEnd } = handlers;
+  const { onHold, onTap, onMoveStart, onMoveEnd, onDrag } = handlers;
 
   let timer = null;
   let longPressed = false;
@@ -21,6 +21,8 @@ export function createInteract(canvas, handlers) {
   let lastInputTime = 0;
   let holding = false;
   let holdX = 0, holdY = 0;
+  let moved = false;          // 拖拽超过阈值后抑制误触 tap
+  let lastX = 0, lastY = 0;
 
   function setPointer(e) {
     const t = e.touches ? e.touches[0] : e;
@@ -34,6 +36,16 @@ export function createInteract(canvas, handlers) {
     pointer.active = false;
     pointer.x = -9999;
     pointer.y = -9999;
+  }
+
+  /** 指针按下且移动时调用：累积 moved 标记，并按需回调 onDrag */
+  function dragMove() {
+    const dx = pointer.x - lastX, dy = pointer.y - lastY;
+    lastX = pointer.x;
+    lastY = pointer.y;
+    if (Math.abs(dx) + Math.abs(dy) < 0.01) return;
+    moved = true;
+    if (!longPressed && onDrag) onDrag(pointer.x, pointer.y, dx, dy);
   }
 
   /** 幂等：同一时刻只允许一次 press 开始 */
@@ -53,6 +65,9 @@ export function createInteract(canvas, handlers) {
     holdStart = now;
     holdX = pointer.x;
     holdY = pointer.y;
+    lastX = pointer.x;
+    lastY = pointer.y;
+    moved = false;
 
     if (onMoveStart) onMoveStart(pointer.x, pointer.y);
 
@@ -70,12 +85,15 @@ export function createInteract(canvas, handlers) {
     holding = false;
     pointer.down = false;
     if (onMoveEnd) onMoveEnd();
-    if (!longPressed && onTap) onTap(pointer.x, pointer.y);
+    if (!longPressed && !moved && onTap) onTap(pointer.x, pointer.y);
     longPressed = false;
   }
 
   // ---- 鼠标 ----
-  canvas.addEventListener('mousemove', (e) => setPointer(e));
+  canvas.addEventListener('mousemove', (e) => {
+    setPointer(e);
+    if (pointer.down) dragMove();
+  });
   canvas.addEventListener('mouseleave', () => { clearPointer(); });
   canvas.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
@@ -105,6 +123,7 @@ export function createInteract(canvas, handlers) {
   canvas.addEventListener('touchmove', (e) => {
     e.preventDefault();
     setPointer(e);
+    dragMove();
   }, { passive: false });
   canvas.addEventListener('touchend', (e) => {
     e.preventDefault();

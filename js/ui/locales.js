@@ -28,6 +28,7 @@ export const LOCALES = {
     'btn.feed': 'Feed the fish',
     'btn.daynight': 'Pause / resume day-night cycle',
     'btn.nest': 'Bring jellyfish home',
+    'btn.current': 'Guide the currents',
     'btn.share': 'Save postcard',
     'btn.settings': 'Settings',
 
@@ -86,6 +87,7 @@ export const LOCALES = {
     'coach.skip': 'Skip',
 
     'daily.rare': '✨ A rare visitor appeared!',
+    'eco.bigfish': '🐟 A curious drifter is roaming — guide the current to keep it from your jellyfish',
 
     'theme.shallow': 'Sunlit Shallows',
     'theme.deep': 'Deep Dive',
@@ -129,6 +131,7 @@ export const LOCALES = {
     'btn.feed': '撒饵喂食',
     'btn.daynight': '暂停 / 继续昼夜循环',
     'btn.nest': '引水母归巢',
+    'btn.current': '引导洋流',
     'btn.share': '保存明信片',
     'btn.settings': '设置',
 
@@ -187,6 +190,7 @@ export const LOCALES = {
     'coach.skip': '跳过',
 
     'daily.rare': '✨ 今日稀有客现身了！',
+    'eco.bigfish': '🐟 一只好奇的大鱼游来了 — 用洋流把它引离水母群',
 
     'theme.shallow': '阳光浅海',
     'theme.deep': '深邃夜潜',
