@@ -56,6 +56,26 @@ export class Jellyfish {
 
     // 闪光（被互动/变异时）
     this.flash = 0;
+
+    // 从存档恢复（成长 / 变异 / 互动次数）
+    if (opts.restore) this._applyRestore(opts.restore);
+  }
+
+  /** 应用存档数据 */
+  _applyRestore(r) {
+    if (typeof r.scale === 'number') this.scale = clamp(r.scale, 0.4, 1.6);
+    if (typeof r.age === 'number') this.age = Math.max(0, r.age);
+    if (typeof r.interactions === 'number') this.interactions = Math.max(0, r.interactions | 0);
+    if (r.mutated) {
+      this.mutated = true;
+      // 变异个体：多两根触须，与 mutate() 表现一致
+      this.tentacles.push(
+        { len: rand(this.r * 1.2, this.r * 2.6), phase: rand(0, TAU), freq: rand(0.02, 0.05), amp: rand(4, 12), width: rand(1.2, 2.6) },
+        { len: rand(this.r * 1.2, this.r * 2.6), phase: rand(0, TAU), freq: rand(0.02, 0.05), amp: rand(4, 12), width: rand(1.2, 2.6) }
+      );
+    }
+    this._glowGrad = null;
+    this._glowKey = '';
   }
 
   _buildTentacles() {

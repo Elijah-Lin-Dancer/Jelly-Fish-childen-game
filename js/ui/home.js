@@ -27,7 +27,7 @@ function writeCustomName(v) {
   } catch (e) { /* 忽略 */ }
 }
 
-export function createHome({ onStart, onToast } = {}) {
+export function createHome({ onStart, onToast, onReset } = {}) {
   const el = {
     home: document.getElementById('home'),
     title: document.getElementById('pond-title'),
@@ -37,6 +37,7 @@ export function createHome({ onStart, onToast } = {}) {
     welcome: document.getElementById('home-welcome'),
     prompt: document.getElementById('home-prompt'),
     hint: document.getElementById('home-hint'),
+    reset: document.getElementById('pond-reset'),
   };
 
   let custom = readCustomName();
@@ -119,6 +120,17 @@ export function createHome({ onStart, onToast } = {}) {
       el.title.addEventListener('click', rename);
       el.title.style.cursor = 'pointer';
       el.title.title = t('home.rename');
+    }
+    if (el.reset) {
+      el.reset.addEventListener('click', () => {
+        const done = onReset ? onReset() : false;
+        if (done) {
+          custom = null;
+          writeCustomName(null);
+          syncTitle();
+          if (onToast) onToast('pond.reset.done');
+        }
+      });
     }
   }
 

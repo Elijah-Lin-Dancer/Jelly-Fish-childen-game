@@ -57,8 +57,8 @@ export const theme = {
  *  初始 phase=0 对应 sun 峰值附近，让用户从明亮的白天开始 */
 export const dayNight = { enabled: true, phase: 0.25, sun: 1, period: 60000 };
 
-/** 图鉴收集 */
-export const collection = { found: new Set(), total: 6, celebrated: false };
+/** 图鉴收集：found 保持 Set 兼容旧逻辑；records 存每物种详情 */
+export const collection = { found: new Set(), total: 6, celebrated: false, records: null };
 
 /** 语言 */
 export const app = { lang: 'en' };

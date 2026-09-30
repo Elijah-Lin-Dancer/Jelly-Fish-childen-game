@@ -11,11 +11,13 @@ import { createPerf } from './ui/perf.js';
 import { initI18n, t, toggleLang, applyI18n } from './ui/i18n.js';
 import { createHud } from './ui/hud.js';
 import { createHome } from './ui/home.js';
+import { createDex } from './ui/dex.js';
 import { createInteract, drawHoldRing } from './ui/interact.js';
 import { createBackground, createLightRays, createWaterSurface, createDepthHaze } from './systems/scenery.js';
 import { createDayNight } from './systems/dayNight.js';
 import { createFeeding } from './systems/feeding.js';
 import { createCollection } from './gameplay/collection.js';
+import { createSave } from './gameplay/save.js';
 import { Jellyfish, JELLY_PALETTES } from './entities/jellyfish.js';
 import { FishSchool } from './entities/fish.js';
 import { Turtle } from './entities/turtle.js';
@@ -58,6 +60,9 @@ const collection = createCollection(
   }
 );
 
+// 池塘存档：把当前水母落盘，重开即"你的池塘"
+const save = createSave(() => jellyfish);
+
 function spawnEggJelly() {
   const j = new Jellyfish(view.W / 2, view.H / 2, 0, {});
   j.r = 64; j.baseR = 64; j.scale = 1;
@@ -81,7 +86,22 @@ const home = createHome({
     audio.unlock();
   },
   onToast: (key) => hud.toast(key),
+  onReset: () => {
+    if (!window.confirm(t('pond.reset.confirm'))) return false;
+    save.reset();
+    collection.reset();
+    clearWorld();
+    seedWorld(null);
+    save.markDirty();
+    save.write();
+    hud.refreshDex();
+    dex.render();
+    return true;
+  },
 });
+
+// ---------- 图鉴面板 ----------
+const dex = createDex();
 
 // ---------- HUD ----------
 const hud = createHud({
@@ -113,6 +133,7 @@ const hud = createHud({
     hud.refreshPhase();
   },
   isFeedMode: () => feeding.mode,
+  openDex: () => dex.toggle(),
 });
 
 // ---------- 世界生成 ----------
@@ -135,6 +156,7 @@ function clearWorld() {
 
 function seedWorld(keepJelly) {
   clearWorld();
+  save.markDirty();
 
   const jn = keepJelly && keepJelly.length ? 0 : quality.jellyfish;
   for (let i = 0; i < jn; i++) {
@@ -169,6 +191,34 @@ function softRebuild() {
     j.y = rand(0, view.H);
   }
   seedWorld(kept.concat(extra));
+  save.markDirty();
+}
+
+/** 恢复上次的池塘；若无可恢复数据则生成全新世界 */
+function restorePond() {
+  const params = save.restoreParams();
+  if (!params || !params.length) {
+    seedWorld(null);
+    return;
+  }
+  clearWorld();
+  for (const p of params) {
+    const j = new Jellyfish(p.x, p.y, p.paletteIndex, { restore: p });
+    jellyfish.push(j);
+  }
+  // 环境照常生成（鱼群 / 海龟 / 浮游 / 气泡）
+  for (let i = 0; i < quality.fishSchools; i++) {
+    schools.push(new FishSchool(rand(view.W * 0.2, view.W * 0.8), rand(view.H * 0.25, view.H * 0.7), quality.fishPerSchool));
+  }
+  const tc = isMobile ? 1 : 2;
+  for (let i = 0; i < tc; i++) turtles.push(new Turtle());
+  for (let i = 0; i < quality.plankton; i++) plankton.push(new Plankton());
+  for (let i = 0; i < quality.seaweed; i++) {
+    seaweeds.push(new Seaweed((view.W / (quality.seaweed + 1)) * (i + 1) + rand(-30, 30)));
+  }
+  for (let i = 0; i < quality.bubbles; i++) {
+    bubbles.push(new Bubble(rand(0, view.W), rand(0, view.H)));
+  }
 }
 
 // ---------- 生成 / 爆裂 ----------
@@ -178,6 +228,7 @@ function spawnJellyfish(x, y, juvenile) {
   const j = new Jellyfish(x, y, undefined, { juvenile });
   jellyfish.push(j);
   audio.bubble();
+  save.markDirty();
   return j;
 }
 
@@ -211,6 +262,7 @@ function unlockJelly(j) {
   if (!collection.has(idx)) {
     // 首次接触即收录
     collection.unlock(idx);
+    dex.render();
   }
 }
 
@@ -224,13 +276,26 @@ const interact = createInteract(canvas, {
   onTap: (x, y) => {
     if (feeding.mode) {
       feeding.drop(x, y);
+      save.markDirty();
       return;
     }
     const j = hitJellyfish(x, y);
     if (j) {
       unlockJelly(j);
-      j.interact();
-      if (j.mutated) hud.toast('dex.new');
+      const before = j.paletteIndex;
+      const mutated = j.interact();
+      if (mutated) {
+        // 变异事件：醒目提示前后配色名
+        hud.toastKey('jelly.mutated', {
+          from: t('jelly.' + JELLY_PALETTES[before].key),
+          to: t('jelly.' + j.palette.key),
+        });
+        collection.recordMutation(j.paletteIndex, before);
+        dex.render();
+      } else if (!j.egg) {
+        collection.see(j.paletteIndex);
+      }
+      save.markDirty();
     }
     createBurst(x, y);
   },
@@ -402,13 +467,17 @@ function start() {
   applyI18n();
   bindVisibility();
   hud.bind();
+  dex.bind();
   hud.refreshDex();
   hud.refreshPhase();
   hud.refreshTheme();
   hud.refreshButtons();
 
-  seedWorld(null);
+  // 优先恢复上次的池塘；无存档则生成新世界
+  restorePond();
   // 注意：预置水母不自动收录 —— 玩家需主动点击接触才能发现物种
+
+  save.start();
 
   // 首页：欢迎页 + 池塘命名
   home.bind();

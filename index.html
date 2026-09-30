@@ -25,7 +25,7 @@
 </div>
 
 <div class="hud hud-top-right">
-  <div class="dex" id="dex">
+  <div class="dex" id="dex" role="button" tabindex="0" aria-label="Codex">
     <span>🪼</span><span id="dex-text" data-i18n="dex.label">0/6 species found</span>
   </div>
   <div class="phase" id="phase-text" data-i18n="phase.noon">Midday</div>
@@ -46,6 +46,17 @@
 
 <div class="toast" id="toast"></div>
 
+<div class="dex-modal hide" id="dex-modal">
+  <div class="dex-panel">
+    <div class="dex-head">
+      <div class="dex-head-title" id="dex-title">Jellyfish Codex</div>
+      <div class="dex-progress" id="dex-progress"></div>
+      <div class="dex-close" id="dex-close" role="button" tabindex="0" aria-label="Close">✕</div>
+    </div>
+    <div class="dex-grid" id="dex-grid"></div>
+  </div>
+</div>
+
 <div class="home hide" id="home">
   <div class="home-card">
     <div class="home-jelly">🪼</div>
@@ -56,6 +67,7 @@
            autocomplete="off" spellcheck="false" placeholder="My Pond" />
     <div class="home-start" id="pond-start" role="button" tabindex="0">Start exploring</div>
     <div class="home-hint" id="home-hint"></div>
+    <div class="home-reset" id="pond-reset" role="button" tabindex="0" data-i18n="pond.reset">Reset pond</div>
   </div>
 </div>
 

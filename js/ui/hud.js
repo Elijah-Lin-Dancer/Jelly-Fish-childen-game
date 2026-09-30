@@ -32,6 +32,15 @@ export function createHud(actions) {
     toastTimer = setTimeout(() => el.toast.classList.remove('show'), 2200);
   }
 
+  /** 带参数的 toast */
+  function toastKey(key, params) {
+    if (!el.toast) return;
+    el.toast.textContent = t(key, params);
+    el.toast.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.toast.classList.remove('show'), 2400);
+  }
+
   function refreshDex() {
     if (!el.dexText) return;
     el.dexText.textContent = t('dex.label', {
@@ -71,11 +80,20 @@ export function createHud(actions) {
     if (el.themeBtn) el.themeBtn.addEventListener('click', () => actions.toggleTheme());
     if (el.feedBtn) el.feedBtn.addEventListener('click', () => actions.toggleFeed());
     if (el.dnBtn) el.dnBtn.addEventListener('click', () => actions.toggleDayNight());
+    if (el.dex) {
+      el.dex.addEventListener('click', () => actions.openDex && actions.openDex());
+      el.dex.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          if (actions.openDex) actions.openDex();
+        }
+      });
+    }
   }
 
   function setFps(v) {
     if (el.fps) el.fps.textContent = t('fps', { n: v });
   }
 
-  return { bind, refreshDex, refreshPhase, refreshTheme, refreshButtons, refreshLang, toast, setFps, el };
+  return { bind, refreshDex, refreshPhase, refreshTheme, refreshButtons, refreshLang, toast, toastKey, setFps, el };
 }
