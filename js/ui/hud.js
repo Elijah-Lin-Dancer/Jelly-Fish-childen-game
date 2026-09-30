@@ -22,6 +22,8 @@ export function createHud(actions) {
     dnBtn: document.getElementById('daynight-btn'),
     ach: document.getElementById('ach'),
     achText: document.getElementById('ach-text'),
+    nestBtn: document.getElementById('nest-btn'),
+    shareBtn: document.getElementById('share-btn'),
   };
 
   let toastTimer = null;
@@ -74,6 +76,11 @@ export function createHud(actions) {
     if (el.ach) el.ach.classList.toggle('complete', n >= 6);
   }
 
+  /** 归巢玩法按钮高亮 */
+  function refreshActivity(active) {
+    if (el.nestBtn) el.nestBtn.classList.toggle('active', !!active);
+  }
+
   function refreshButtons() {
     if (el.feedBtn) el.feedBtn.classList.toggle('active', !!actions.isFeedMode && actions.isFeedMode());
     if (el.langBtn) el.langBtn.textContent = app.lang === 'zh' ? '中' : 'EN';
@@ -90,6 +97,8 @@ export function createHud(actions) {
     if (el.themeBtn) el.themeBtn.addEventListener('click', () => actions.toggleTheme());
     if (el.feedBtn) el.feedBtn.addEventListener('click', () => actions.toggleFeed());
     if (el.dnBtn) el.dnBtn.addEventListener('click', () => actions.toggleDayNight());
+    if (el.nestBtn) el.nestBtn.addEventListener('click', () => actions.toggleActivity && actions.toggleActivity());
+    if (el.shareBtn) el.shareBtn.addEventListener('click', () => actions.share && actions.share());
     if (el.dex) {
       el.dex.addEventListener('click', () => actions.openDex && actions.openDex());
       el.dex.addEventListener('keydown', (e) => {
@@ -114,5 +123,5 @@ export function createHud(actions) {
     if (el.fps) el.fps.textContent = t('fps', { n: v });
   }
 
-  return { bind, bindAch, refreshDex, refreshPhase, refreshTheme, refreshAch, refreshButtons, refreshLang, toast, toastKey, setFps, el };
+  return { bind, bindAch, refreshDex, refreshPhase, refreshTheme, refreshAch, refreshActivity, refreshButtons, refreshLang, toast, toastKey, setFps, el };
 }

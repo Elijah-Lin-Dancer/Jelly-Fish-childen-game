@@ -12,10 +12,12 @@ import { initI18n, t, toggleLang, applyI18n } from './ui/i18n.js';
 import { createHud } from './ui/hud.js';
 import { createHome } from './ui/home.js';
 import { createDex } from './ui/dex.js';
+import { createShare } from './ui/share.js';
 import { createInteract, drawHoldRing } from './ui/interact.js';
 import { createBackground, createLightRays, createWaterSurface, createDepthHaze } from './systems/scenery.js';
 import { createDayNight } from './systems/dayNight.js';
 import { createFeeding } from './systems/feeding.js';
+import { createActivity } from './systems/activity.js';
 import { createCollection } from './gameplay/collection.js';
 import { createSave } from './gameplay/save.js';
 import { createAchievements } from './gameplay/achievements.js';
@@ -129,6 +131,24 @@ const home = createHome({
 // ---------- 图鉴面板 ----------
 const dex = createDex();
 
+// ---------- 明信片分享 ----------
+const share = createShare(
+  () => canvas,
+  () => home.name,
+  (key) => hud.toast(key)
+);
+
+// ---------- 轻量玩法：引水母归巢 ----------
+const activity = createActivity(() => jellyfish, {
+  onSuccess: () => {
+    hud.toast('activity.success');
+    ripples.push(new Celebrate(view.W / 2, view.H / 2, '160, 255, 200', 320));
+    // 达成也计入一个小统计（可选）
+    stats.summoned += 0;
+  },
+  onStateChange: (s) => hud.refreshActivity(s === 'active'),
+});
+
 // ---------- HUD ----------
 const hud = createHud({
   toggleSound: () => {
@@ -160,6 +180,11 @@ const hud = createHud({
   },
   isFeedMode: () => feeding.mode,
   openDex: () => dex.toggle(),
+  share: () => share.capture(),
+  toggleActivity: () => {
+    activity.toggle();
+    hud.refreshButtons();
+  },
 });
 
 // ---------- 世界生成 ----------
@@ -422,6 +447,11 @@ scheduler.add({
   entities: ripples,
 });
 scheduler.add(createWaterSurface());
+scheduler.add({
+  id: 'activity', order: 90,
+  update: () => activity.update(dtGlobal),
+  draw: (c) => activity.draw(c),
+});
 scheduler.add({
   id: 'holdring', order: 100,
   draw: (c) => {

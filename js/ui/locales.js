@@ -27,6 +27,8 @@ export const LOCALES = {
     'btn.theme': 'Switch theme',
     'btn.feed': 'Feed the fish',
     'btn.daynight': 'Pause / resume day-night cycle',
+    'btn.nest': 'Bring jellyfish home',
+    'btn.share': 'Save postcard',
 
     'dex.label': '{n}/{total} species found',
     'dex.new': 'New species!',
@@ -62,6 +64,10 @@ export const LOCALES = {
     'ach.feeder.desc': 'Drop food 50 times',
     'ach.none': 'No achievements yet — keep exploring!',
     'ach.summary': '🏆 {n}/{total}: {names}',
+
+    'share.saved': '📸 Postcard saved',
+    'share.fail': 'Could not save postcard',
+    'activity.success': '🎯 Jellyfish came home!',
 
     'theme.shallow': 'Sunlit Shallows',
     'theme.deep': 'Deep Dive',
@@ -104,6 +110,8 @@ export const LOCALES = {
     'btn.theme': '切换主题',
     'btn.feed': '撒饵喂食',
     'btn.daynight': '暂停 / 继续昼夜循环',
+    'btn.nest': '引水母归巢',
+    'btn.share': '保存明信片',
 
     'dex.label': '已发现 {n}/{total} 种',
     'dex.new': '新物种！',
@@ -139,6 +147,10 @@ export const LOCALES = {
     'ach.feeder.desc': '投喂 50 次',
     'ach.none': '还没有成就 — 继续探索吧！',
     'ach.summary': '🏆 {n}/{total}：{names}',
+
+    'share.saved': '📸 明信片已保存',
+    'share.fail': '明信片保存失败',
+    'activity.success': '🎯 水母回家啦！',
 
     'theme.shallow': '阳光浅海',
     'theme.deep': '深邃夜潜',
