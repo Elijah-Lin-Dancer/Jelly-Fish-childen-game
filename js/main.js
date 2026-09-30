@@ -158,7 +158,7 @@ function spawnEggJelly() {
 }
 
 const feeding = createFeeding(baits, (x, y) => {
-  audio.bubble();
+  audio.sfx('tap');
   stats.fed++;
   economy.gain(2);   // 投喂产出生物荧光
   achievements.check(stats, { type: 'feed' });
@@ -301,6 +301,7 @@ const ecosystem = createEcosystem({
     jellyfish.splice(i, 1);
     stats.snatched = (stats.snatched || 0) + 1;
     hud.toastKey('adventure.snatch', { name: t('jelly.' + JELLY_PALETTES[victim.paletteIndex].key) });
+    audio.sfx('snatch');
     ripples.push(new Celebrate(victim.x, victim.y, '255, 120, 120', 180));
     for (let k = 0; k < 14; k++) bubbles.push(new Bubble(victim.x + rand(-26, 26), victim.y + rand(-18, 18), true));
     save.markDirty();
@@ -325,6 +326,7 @@ const breeding = createBreeding({
     collection.see(child.paletteIndex, child.traits);
     if (hud.refreshBio) hud.refreshBio(economy.bio);
     if (lab.isOpen) lab.render();
+    audio.sfx('breed');
   },
 });
 
@@ -372,6 +374,7 @@ const buildPlace = { active: false, id: null, remove: false };
 const modeSelect = createModeSelect({
   onPick: (m) => {
     mode.set(m);
+    audio.sfx('mode');
     // 选定模式后正式建立新池塘
     save.markDirty();
     save.write();
@@ -423,6 +426,7 @@ function spawnBogyo(announce = true) {
 const memory = createMemory(() => {
   spawnBogyo(true);
   hud.toastText(memory.content.greeting);
+  audio.sfx('unlock');
 });
 
 const memoryPad = createMemoryPad(memory, {
@@ -594,7 +598,7 @@ function spawnJellyfish(x, y, juvenile) {
     growthCap: mode.isAdventure() ? 2.0 : 1.0,
   });
   jellyfish.push(j);
-  audio.bubble();
+  audio.sfx('tap');
   save.markDirty();
   // 召唤统计 + 成就（breeder=30 / summoner=25 都靠它）
   stats.summoned++;
@@ -611,7 +615,7 @@ function createBurst(x, y) {
     const dx = j.x - x, dy = j.y - y;
     if (dx * dx + dy * dy < 150 * 150) j.scare();
   }
-  audio.bubble();
+  audio.sfx('tap');
 }
 
 /** 点击命中水母则计一次互动 */
@@ -676,6 +680,7 @@ const interact = createInteract(canvas, {
         });
         if (bi >= 0) {
           build.remove(bi);
+          audio.sfx('remove');
         } else {
           buildPad.exitRemove();
           buildPlace.active = false; buildPlace.remove = false;
@@ -684,6 +689,7 @@ const interact = createInteract(canvas, {
         }
       } else if (buildPlace.id) {
         if (build.place(buildPlace.id, x, y)) {
+          audio.sfx('build');
           ripples.push(new Ripple(x, y));
           for (let i = 0; i < 10; i++) bubbles.push(new Bubble(x + rand(-24, 24), y + rand(-16, 16), true));
         }
@@ -705,7 +711,7 @@ const interact = createInteract(canvas, {
     if (hitBogyo(x, y)) {
       bogyo.tap();
       hud.toastText(bogyo.name);
-      audio.bubble();
+      audio.sfx('tap');
       createBurst(x, y);
       return;
     }
@@ -718,7 +724,7 @@ const interact = createInteract(canvas, {
       hitSecret.found = true;
       explore.discover(hitSecret.id);
       ripples.push(new Celebrate(hitSecret.x, hitSecret.y, '255, 236, 170', 200));
-      audio.bubble();
+      audio.sfx('tap');
       save.markDirty();
       return;
     }
@@ -727,7 +733,7 @@ const interact = createInteract(canvas, {
         // 隐藏纪念水母：回应触摸，但不变异、不收录
         j.flash = 1;
         ripples.push(new Ripple(j.x, j.y));
-        audio.bubble();
+        audio.sfx('tap');
         createBurst(x, y);
         return;
       }
@@ -757,7 +763,7 @@ const interact = createInteract(canvas, {
     // 长按 Bogyó：他会撒娇蹭一蹭（不召唤新水母）
     if (hitBogyo(x, y)) {
       bogyo.nuzzleMe();
-      audio.bubble();
+      audio.sfx('nuzzle');
       ripples.push(new Ripple(bogyo.x, bogyo.y));
       return;
     }
@@ -967,7 +973,7 @@ function loop(t) {
   fpsThrottle += dt;
   if (fpsThrottle > 500) {
     fpsThrottle = 0;
-    audio.modulate(dayNight.sun);
+    audio.modulate(dayNight.sun, mode.current);
     hud.refreshPhase();
     hud.setFps(perf.fps);
   }

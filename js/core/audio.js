@@ -1,133 +1,174 @@
 // ============================================================
-//  WebAudio 水下环境音
-//  补齐 bp/og/ng 引用，支持昼夜/深度调制
+//  WebAudio · Phase 9 真实音频（加载 .wav + 事件分发）
+//  - 背景乐：assets/audio/music_loop.wav（生成式 pad，无缝循环）
+//  - 事件音效：sfx_tap / breed / feed / build / remove / snatch /
+//              unlock / mode / nuzzle
+//  - 昼夜 + 模式联动：改变循环速率 / 低通 / 音量
+//  - 全部失败静默降级，绝不让音频崩游戏
 // ============================================================
 
 import { rand } from './config.js';
 
-export function createAudio() {
-  let audioCtx = null;
-  let nodes = null;
+// 音效名 -> 文件名（无扩展名，下面统一拼 .wav）
+const SFX_FILES = {
+  tap: 'sfx_tap',
+  breed: 'sfx_breed',
+  feed: 'sfx_feed',
+  build: 'sfx_build',
+  remove: 'sfx_remove',
+  snatch: 'sfx_snatch',
+  unlock: 'sfx_unlock',
+  mode: 'sfx_mode',
+  nuzzle: 'sfx_nuzzle',
+};
+
+export function createAudio(base = 'assets/audio/') {
+  let ctx = null;
+  let master, musicFilter, musicBus, sfxBus;
+  let musicSrc = null;
+  let musicBuffer = null;
+  let buffers = {};        // sfx 名 -> AudioBuffer
+  let loaded = false;
+  let loading = null;
   let soundOn = false;
+  let sun = 1;             // 1=正午 0=午夜
+  let mode = 'peace';
 
   function init() {
-    if (audioCtx) return;
+    if (ctx) return;
     try {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    } catch (e) { /* 不支持则静默降级 */ }
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {
+      ctx = null;
+      return;
+    }
+    master = ctx.createGain();
+    master.gain.value = 0.9;
+    master.connect(ctx.destination);
+
+    musicFilter = ctx.createBiquadFilter();
+    musicFilter.type = 'lowpass';
+    musicFilter.frequency.value = 2200;
+    musicFilter.Q.value = 0.4;
+
+    musicBus = ctx.createGain();
+    musicBus.gain.value = 0.5;
+    musicBus.connect(musicFilter);
+    musicFilter.connect(master);
+
+    sfxBus = ctx.createGain();
+    sfxBus.gain.value = 0.9;
+    sfxBus.connect(master);
   }
 
-  function start() {
-    if (!audioCtx || nodes) return;
-
-    const master = audioCtx.createGain();
-    master.gain.value = 0.18;
-    master.connect(audioCtx.destination);
-
-    const o1 = audioCtx.createOscillator();
-    o1.type = 'sine'; o1.frequency.value = 55;
-    const o2 = audioCtx.createOscillator();
-    o2.type = 'sine'; o2.frequency.value = 82.5;
-    const og = audioCtx.createGain();
-    og.gain.value = 0.5;
-    o1.connect(og); o2.connect(og);
-
-    const lfo = audioCtx.createOscillator();
-    lfo.frequency.value = 0.08;
-    const lfoGain = audioCtx.createGain();
-    lfoGain.gain.value = 0.15;
-    lfo.connect(lfoGain);
-    lfoGain.connect(og.gain);
-
-    const size = audioCtx.sampleRate * 2;
-    const buffer = audioCtx.createBuffer(1, size, audioCtx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < size; i++) data[i] = Math.random() * 2 - 1;
-    const noise = audioCtx.createBufferSource();
-    noise.buffer = buffer; noise.loop = true;
-    const bp = audioCtx.createBiquadFilter();
-    bp.type = 'bandpass'; bp.frequency.value = 400; bp.Q.value = 0.7;
-    const ng = audioCtx.createGain();
-    ng.gain.value = 0.06;
-    noise.connect(bp); bp.connect(ng);
-
-    og.connect(master);
-    ng.connect(master);
-
-    o1.start(); o2.start(); lfo.start(); noise.start();
-
-    // 保留全部节点引用，便于后续调制
-    nodes = { master, o1, o2, og, lfo, lfoGain, noise, bp, ng };
+  /** 预加载所有音频缓冲（首次用户手势触发，失败静默） */
+  function load() {
+    if (loaded) return Promise.resolve();
+    if (loading) return loading;
+    init();
+    loading = (async () => {
+      if (!ctx) { loaded = true; return; }
+      const entries = [['music', base + 'music_loop.wav']]
+        .concat(Object.keys(SFX_FILES).map((k) => [k, base + SFX_FILES[k] + '.wav']));
+      await Promise.all(entries.map(async ([k, url]) => {
+        try {
+          const r = await fetch(url);
+          if (!r.ok) return;
+          const ab = await r.arrayBuffer();
+          const buf = await ctx.decodeAudioData(ab);
+          if (k === 'music') musicBuffer = buf;
+          else buffers[k] = buf;
+        } catch (e) { /* 单个文件失败不影响其余 */ }
+      }));
+      loaded = true;
+    })();
+    return loading;
   }
 
-  function stop() {
-    if (!nodes) return;
-    const n = nodes;
-    nodes = null;
+  function applyMusicParams() {
+    if (!ctx) return;
+    const night = 1 - sun;                       // 0 白天 .. 1 夜晚
+    const rate = (mode === 'adventure' ? 0.92 : 1.0) * (1 - night * 0.12);
+    const cutoff = Math.max(500, 2400 - night * 1100 - (mode === 'adventure' ? 300 : 0));
+    const g = (mode === 'adventure' ? 0.42 : 0.5) * (0.7 + sun * 0.3);
     try {
-      n.master.gain.cancelScheduledValues(audioCtx.currentTime);
-      n.master.gain.setValueAtTime(n.master.gain.value, audioCtx.currentTime);
-      n.master.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
-      setTimeout(() => {
-        try { n.o1.stop(); n.o2.stop(); n.lfo.stop(); n.noise.stop(); } catch (e) { /* 已停止 */ }
-      }, 600);
+      if (musicSrc) musicSrc.playbackRate.setTargetAtTime(rate, ctx.currentTime, 0.6);
+      musicFilter.frequency.setTargetAtTime(cutoff, ctx.currentTime, 0.6);
+      musicBus.gain.setTargetAtTime(g, ctx.currentTime, 0.6);
     } catch (e) { /* 忽略 */ }
   }
 
-  /** 昼夜联动：入夜时低频更重、噪声更闷 */
-  function modulate(sun) {
-    if (!nodes || !audioCtx) return;
-    const now = audioCtx.currentTime;
-    const midi = 300 + (1 - sun) * 260;      // 400 -> 560 (夜)
-    const q = 0.7 - (1 - sun) * 0.25;
-    nodes.bp.frequency.setTargetAtTime(midi, now, 0.5);
-    nodes.bp.Q.setTargetAtTime(q, now, 0.5);
-    nodes.og.gain.setTargetAtTime(0.5 + (1 - sun) * 0.25, now, 0.5);
+  function startLoop() {
+    if (!ctx || !musicBuffer || musicSrc || !soundOn) return;
+    musicSrc = ctx.createBufferSource();
+    musicSrc.buffer = musicBuffer;
+    musicSrc.loop = true;
+    musicSrc.connect(musicBus);
+    applyMusicParams();
+    try { musicSrc.start(); } catch (e) { musicSrc = null; }
   }
 
-  function bubble() {
-    if (!audioCtx || !soundOn) return;
+  function stopLoop() {
+    if (!musicSrc) return;
+    const s = musicSrc;
+    musicSrc = null;
     try {
-      const o = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      o.type = 'sine';
-      const f = rand(600, 1200);
-      o.frequency.setValueAtTime(f, audioCtx.currentTime);
-      o.frequency.exponentialRampToValueAtTime(f * 0.5, audioCtx.currentTime + 0.15);
-      g.gain.setValueAtTime(0.12, audioCtx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.18);
-      o.connect(g); g.connect(audioCtx.destination);
-      o.start(); o.stop(audioCtx.currentTime + 0.2);
+      s.stop(ctx.currentTime + 0.05);
+    } catch (e) { /* 已停止 */ }
+  }
+
+  /** 播放一次性事件音效 */
+  function sfx(name) {
+    if (!ctx || !soundOn) return;
+    const buf = buffers[name];
+    if (!buf) return;
+    try {
+      const s = ctx.createBufferSource();
+      s.buffer = buf;
+      s.connect(sfxBus);
+      s.start();
     } catch (e) { /* 忽略 */ }
   }
 
   function toggle() {
     init();
-    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    if (ctx && ctx.state === 'suspended') ctx.resume();
     soundOn = !soundOn;
-    if (soundOn) start(); else stop();
+    if (soundOn) {
+      load().then(() => { if (soundOn) startLoop(); });
+    } else {
+      stopLoop();
+    }
     return soundOn;
   }
 
+  /** 首次手势：解锁上下文并预热缓冲（不自动放乐） */
   function unlock() {
     init();
-    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    if (ctx && ctx.state === 'suspended') ctx.resume();
+    load();
   }
 
-  /** 页面切后台：挂起音频上下文省电 */
+  /** 兼容旧调用：点击泡 = tap 事件音 */
+  function bubble() { sfx('tap'); }
+
+  /** 昼夜 + 模式联动：在循环中每 500ms 调一次 */
+  function modulate(s, m) {
+    if (typeof s === 'number') sun = s;
+    if (m) mode = m;
+    applyMusicParams();
+  }
+
   function suspend() {
-    try { if (audioCtx && audioCtx.state === 'running') audioCtx.suspend(); } catch (e) { /* 忽略 */ }
+    try { if (ctx && ctx.state === 'running') ctx.suspend(); } catch (e) { /* 忽略 */ }
   }
 
-  /** 页面回前台：仅在音效开启时恢复 */
   function resume() {
-    try {
-      if (audioCtx && soundOn && audioCtx.state === 'suspended') audioCtx.resume();
-    } catch (e) { /* 忽略 */ }
+    try { if (ctx && soundOn && ctx.state === 'suspended') ctx.resume(); } catch (e) { /* 忽略 */ }
   }
 
   return {
-    init, unlock, toggle, bubble, modulate, suspend, resume,
+    init, unlock, toggle, bubble, sfx, modulate, suspend, resume,
     get on() { return soundOn; },
   };
 }

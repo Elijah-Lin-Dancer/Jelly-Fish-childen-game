@@ -940,6 +940,7 @@ body.current-mode #ocean-canvas { cursor: crosshair; }
   background: rgba(2, 8, 20, 0.82);
   backdrop-filter: blur(6px);
 }
+.mode-select.hide { opacity: 0; visibility: hidden; pointer-events: none; }
 .mode-card {
   width: min(560px, 92vw);
   text-align: center;
