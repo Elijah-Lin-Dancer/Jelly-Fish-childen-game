@@ -51,6 +51,15 @@ export function createHud(actions) {
     toastTimer = setTimeout(() => el.toast.classList.remove('show'), 2400);
   }
 
+  /** 直接给出文本的 toast（隐藏纪念内容的匈牙利语开场白等） */
+  function toastText(text) {
+    if (!el.toast || text == null) return;
+    el.toast.textContent = text;
+    el.toast.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.toast.classList.remove('show'), 4200);
+  }
+
   function refreshDex() {
     if (!el.dexText) return;
     el.dexText.textContent = t('dex.label', {
@@ -145,5 +154,5 @@ export function createHud(actions) {
     if (el.fps) el.fps.textContent = t('fps', { n: v });
   }
 
-  return { bind, bindAch, refreshDex, refreshPhase, refreshTheme, refreshAch, refreshActivity, refreshBio, refreshZone, refreshButtons, refreshLang, toast, toastKey, setFps, el };
+  return { bind, bindAch, refreshDex, refreshPhase, refreshTheme, refreshAch, refreshActivity, refreshBio, refreshZone, refreshButtons, refreshLang, toast, toastKey, toastText, setFps, el };
 }

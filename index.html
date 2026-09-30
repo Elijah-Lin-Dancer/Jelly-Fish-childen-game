@@ -107,6 +107,29 @@
   </div>
 </div>
 
+<div class="dex-modal hide" id="memory-modal">
+  <div class="dex-panel memory-panel">
+    <div class="dex-head">
+      <div class="dex-head-title" id="memory-title">…</div>
+      <div class="dex-close" id="memory-close" role="button" tabindex="0" aria-label="Close">✕</div>
+    </div>
+    <input class="memory-input" id="memory-input" type="password" maxlength="64"
+           autocomplete="off" spellcheck="false" placeholder="••••" />
+    <div class="memory-err" id="memory-err"></div>
+    <div class="memory-submit" id="memory-submit" role="button" tabindex="0"></div>
+  </div>
+</div>
+
+<div class="dex-modal hide" id="memory-card-modal">
+  <div class="dex-panel memory-card-panel">
+    <div class="dex-close memory-card-x" id="memory-card-close" role="button" tabindex="0" aria-label="Close">✕</div>
+    <canvas class="memory-card-canvas" id="memory-card-canvas"></canvas>
+    <div class="memory-card-name" id="memory-card-name"></div>
+    <div class="memory-card-sub" id="memory-card-sub"></div>
+    <div class="memory-card-lines" id="memory-card-lines"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <div class="dex-modal hide" id="dex-modal">

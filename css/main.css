@@ -795,3 +795,95 @@ body.current-mode #ocean-canvas { cursor: crosshair; }
 .atlas-quest { font-size: 12px; display: flex; gap: 8px; opacity: 0.85; }
 .atlas-quest.done { opacity: 0.5; text-decoration: line-through; }
 .atlas-quest-mark { color: #8fd0ff; }
+
+/* ===== 隐藏纪念内容 ===== */
+.memory-panel { max-width: 380px; text-align: center; }
+.memory-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  margin-top: 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(150, 210, 255, 0.28);
+  background: rgba(4, 18, 40, 0.7);
+  color: var(--hud-fg);
+  font-family: inherit;
+  font-size: 15px;
+  letter-spacing: 2px;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.memory-input:focus { border-color: rgba(150, 210, 255, 0.6); }
+.memory-err {
+  min-height: 18px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #ff9a9a;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+.memory-err.show { opacity: 0.9; }
+.memory-submit {
+  margin-top: 10px;
+  padding: 11px;
+  border-radius: 12px;
+  border: 1px solid rgba(150, 210, 255, 0.3);
+  background: var(--btn-bg);
+  font-size: 13px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: background 0.2s, border-color 0.2s;
+}
+.memory-submit:hover { background: var(--btn-bg-hover); border-color: rgba(150, 210, 255, 0.55); }
+.memory-submit.busy { opacity: 0.6; pointer-events: none; }
+
+.memory-card-panel {
+  max-width: 420px;
+  text-align: center;
+  position: relative;
+  padding-top: 34px;
+}
+.memory-card-x { position: absolute; top: 14px; right: 16px; }
+.memory-card-canvas {
+  width: 160px;
+  height: 160px;
+  display: block;
+  margin: 0 auto 6px;
+}
+.memory-card-name {
+  font-size: 26px;
+  letter-spacing: 2px;
+  color: #ffe6c4;
+  margin-bottom: 4px;
+}
+.memory-card-sub {
+  font-size: 12px;
+  font-style: italic;
+  opacity: 0.6;
+  margin-bottom: 20px;
+}
+.memory-card-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 8px 10px;
+}
+.memory-line {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: rgba(226, 240, 255, 0.92);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 1s ease, transform 1s ease;
+}
+.memory-line.show { opacity: 1; transform: translateY(0); }
+
+@media (max-width: 520px) {
+  .memory-card-name { font-size: 22px; }
+  .memory-card-canvas { width: 132px; height: 132px; }
+  .memory-line { font-size: 13px; }
+}

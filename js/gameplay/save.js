@@ -35,7 +35,8 @@ export function createSave(getJellyfish) {
     const arr = getJellyfish() || [];
     // 上限与运行时一致，避免存档无限膨胀
     const cap = Math.round((quality.jellyfish || 20) * 2.5);
-    return arr.slice(0, cap).map(serialize);
+    // 隐藏纪念水母不入存档：它的存在由 ocean.memory 决定，避免被重复计算
+    return arr.filter((j) => !j.isMemory).slice(0, cap).map(serialize);
   }
 
   function write() {

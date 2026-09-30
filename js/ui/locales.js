@@ -152,6 +152,12 @@ export const LOCALES = {
     'jelly.yellow': 'Golden Halo',
 
     'fps': '{n} FPS',
+
+    // ---- 隐藏纪念内容（口令面板文案；内容文案在 memory.config.js） ----
+    'memory.pad.title': '…',
+    'memory.pad.submit': 'Enter',
+    'memory.pad.empty': 'Nothing entered.',
+    'memory.pad.bad': 'That is not it.',
   },
 
   zh: {
@@ -302,6 +308,12 @@ export const LOCALES = {
     'jelly.yellow': '金色光环',
 
     'fps': '{n} FPS',
+
+    // ---- 隐藏纪念内容 ----
+    'memory.pad.title': '…',
+    'memory.pad.submit': '确认',
+    'memory.pad.empty': '还没有输入。',
+    'memory.pad.bad': '不是这个。',
   },
 };
 

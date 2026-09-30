@@ -35,6 +35,9 @@ import { createZones } from './systems/zones.js';
 import { createQuests } from './systems/quests.js';
 import { createAtlas } from './ui/atlas.js';
 import { Secret, seedSecrets } from './entities/secret.js';
+import { createMemory } from './gameplay/memory.js';
+import { createMemoryPad } from './ui/memoryPad.js';
+import { Bogyo } from './entities/bogyo.js';
 import { dailyRareIndex } from './gameplay/daily.js';
 import { Jellyfish, JELLY_PALETTES } from './entities/jellyfish.js';
 import { FishSchool } from './entities/fish.js';
@@ -148,6 +151,9 @@ const home = createHome({
     explore.reset();
     quests.reset();
     zones.setZone('shallow', true);
+    // 隐藏纪念内容一并清除（避免从重置状态反推）
+    if (memory) memory.reset();
+    bogyo = null;
     stats.summoned = 0;
     stats.fed = 0;
     stats.mutations = 0;
@@ -298,6 +304,36 @@ const quests = createQuests({
 
 const atlas = createAtlas({ explore, zones, story, quests });
 setZoneProvider(zones);   // 背景 / 景深读取海域色调
+
+// ---------- 隐藏纪念内容（Bogyó） ----------
+let bogyo = null;
+
+/** 把 Bogyó 放进海洋（已存在则不重复添加） */
+function spawnBogyo(announce = true) {
+  if (bogyo && jellyfish.includes(bogyo)) return bogyo;
+  const c = memory.content;
+  bogyo = new Bogyo(rand(view.W * 0.25, view.W * 0.75), rand(view.H * 0.3, view.H * 0.6), {
+    palette: c.palette,
+    name: c.name,
+  });
+  jellyfish.push(bogyo);
+  if (announce) {
+    ripples.push(new Celebrate(bogyo.x, bogyo.y, '255, 214, 150', 260));
+    for (let i = 0; i < 24; i++) {
+      bubbles.push(new Bubble(bogyo.x + rand(-40, 40), bogyo.y + rand(-30, 30), true));
+    }
+  }
+  return bogyo;
+}
+
+const memory = createMemory(() => {
+  spawnBogyo(true);
+  hud.toastText(memory.content.greeting);
+});
+
+const memoryPad = createMemoryPad(memory, {
+  onUnlock: () => { save.markDirty(); },
+});
 
 /** 目标判定上下文 */
 function questCtx() {
@@ -487,7 +523,7 @@ function hitJellyfish(x, y) {
 }
 
 function unlockJelly(j) {
-  if (!j || j.egg) return;
+  if (!j || j.egg || j.isMemory) return;   // 隐藏纪念水母不收录图鉴
   const idx = j.paletteIndex;
   if (!collection.has(idx)) {
     // 首次接触即收录
@@ -524,6 +560,14 @@ const interact = createInteract(canvas, {
       return;
     }
     if (j) {
+      if (j.isMemory) {
+        // 隐藏纪念水母：回应触摸，但不变异、不收录
+        j.flash = 1;
+        ripples.push(new Ripple(j.x, j.y));
+        audio.bubble();
+        createBurst(x, y);
+        return;
+      }
       unlockJelly(j);
       const before = j.paletteIndex;
       const mutated = j.interact();
@@ -786,6 +830,7 @@ function start() {
   if (hud.refreshBio) hud.refreshBio(economy.bio);
   lab.bind();
   atlas.bind();
+  memoryPad.bind();
   if (hud.refreshZone) hud.refreshZone(zones.label);
   setupZoneContent(zones.current);
   if (hud.refreshActivity) hud.refreshActivity(false);
@@ -796,6 +841,10 @@ function start() {
   // 优先恢复上次的池塘；无存档则生成新世界
   restorePond();
   // 注意：预置水母不自动收录 —— 玩家需主动点击接触才能发现物种
+
+  // 隐藏纪念内容：已解锁则让他常驻海洋
+  // （必须在 restorePond 之后：clearWorld 会清空数组）
+  if (memory.unlocked) spawnBogyo(false);
 
   save.start();
 
