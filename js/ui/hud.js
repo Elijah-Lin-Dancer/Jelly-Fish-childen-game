@@ -19,6 +19,8 @@ export function createHud(actions) {
     currentBtn: document.getElementById('current-btn'),
     labBtn: document.getElementById('lab-btn'),
     bioText: document.getElementById('bio-text'),
+    atlasBtn: document.getElementById('atlas-btn'),
+    zoneText: document.getElementById('zone-text'),
     themeBtn: document.getElementById('theme-btn'),
     soundBtn: document.getElementById('sound-btn'),
     langBtn: document.getElementById('lang-btn'),
@@ -90,6 +92,11 @@ export function createHud(actions) {
     if (el.bioText) el.bioText.textContent = t('bio.label', { n: n | 0 });
   }
 
+  /** 当前海域名 */
+  function refreshZone(labelKey) {
+    if (el.zoneText) el.zoneText.textContent = t(labelKey);
+  }
+
   function refreshButtons() {
     if (el.feedBtn) el.feedBtn.classList.toggle('active', !!actions.isFeedMode && actions.isFeedMode());
     if (el.currentBtn) el.currentBtn.classList.toggle('active', !!actions.isCurrentMode && actions.isCurrentMode());
@@ -109,6 +116,7 @@ export function createHud(actions) {
     if (el.feedBtn) el.feedBtn.addEventListener('click', () => actions.toggleFeed());
     if (el.currentBtn) el.currentBtn.addEventListener('click', () => actions.toggleCurrent && actions.toggleCurrent());
     if (el.labBtn) el.labBtn.addEventListener('click', () => actions.openLab && actions.openLab());
+    if (el.atlasBtn) el.atlasBtn.addEventListener('click', () => actions.openAtlas && actions.openAtlas());
     if (el.dnBtn) el.dnBtn.addEventListener('click', () => actions.toggleDayNight());
     if (el.nestBtn) el.nestBtn.addEventListener('click', () => actions.toggleActivity && actions.toggleActivity());
     if (el.shareBtn) el.shareBtn.addEventListener('click', () => actions.share && actions.share());
@@ -137,5 +145,5 @@ export function createHud(actions) {
     if (el.fps) el.fps.textContent = t('fps', { n: v });
   }
 
-  return { bind, bindAch, refreshDex, refreshPhase, refreshTheme, refreshAch, refreshActivity, refreshBio, refreshButtons, refreshLang, toast, toastKey, setFps, el };
+  return { bind, bindAch, refreshDex, refreshPhase, refreshTheme, refreshAch, refreshActivity, refreshBio, refreshZone, refreshButtons, refreshLang, toast, toastKey, setFps, el };
 }

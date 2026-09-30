@@ -15,8 +15,9 @@
 
 <canvas id="ocean-canvas"></canvas>
 
-<div class="hud hud-top-left">
+  <div class="hud hud-top-left">
   <div class="title" id="pond-title">Jellyfish Ocean</div>
+  <div class="zone" id="zone-text" data-i18n="zone.shallow">Sunlit Shallows</div>
   <div class="hint" id="hint">
     <span data-i18n="hud.hint.move">Move — attract jellyfish</span><br>
     <span data-i18n="hud.hint.click">Tap — bubbles &amp; ripples</span><br>
@@ -40,6 +41,7 @@
 <div class="hud hud-bottom-right">
   <div class="btn" id="feed-btn" role="button" tabindex="0" data-i18n-title="btn.feed" aria-label="Feed">🫧</div>
   <div class="btn" id="current-btn" role="button" tabindex="0" data-i18n-title="btn.current" aria-label="Currents">🌊</div>
+  <div class="btn" id="atlas-btn" role="button" tabindex="0" data-i18n-title="btn.atlas" aria-label="Explore atlas">🧭</div>
   <div class="btn" id="lab-btn" role="button" tabindex="0" data-i18n-title="btn.lab" aria-label="Breeding lab">❖</div>
   <div class="btn" id="nest-btn" role="button" tabindex="0" data-i18n-title="btn.nest" aria-label="Bring home">🎯</div>
   <div class="btn" id="share-btn" role="button" tabindex="0" data-i18n-title="btn.share" aria-label="Share">📸</div>
@@ -87,6 +89,21 @@
       <span class="lab-stat" id="lab-breeds"></span>
     </div>
     <div class="lab-spec-list" id="lab-spec-list"></div>
+  </div>
+</div>
+
+<div class="dex-modal hide" id="atlas-modal">
+  <div class="dex-panel atlas-panel">
+    <div class="dex-head">
+      <div class="dex-head-title" id="atlas-title">Explore Atlas</div>
+      <div class="dex-close" id="atlas-close" role="button" tabindex="0" aria-label="Close">✕</div>
+    </div>
+    <div class="atlas-stats" id="atlas-stats"></div>
+    <div class="atlas-zones" id="atlas-zones"></div>
+    <div class="atlas-section-title">Story</div>
+    <div class="atlas-story" id="atlas-story"></div>
+    <div class="atlas-section-title">Quests</div>
+    <div class="atlas-quests" id="atlas-quests"></div>
   </div>
 </div>
 

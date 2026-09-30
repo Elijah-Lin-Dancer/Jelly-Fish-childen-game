@@ -750,3 +750,34 @@ body.current-mode #ocean-canvas { cursor: crosshair; }
   margin-top: 4px;
   letter-spacing: 0.2px;
 }
+
+/* 阶段七：海域名 / 探索图鉴 */
+.zone {
+  font-size: 11px;
+  opacity: 0.6;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+  color: #bfe9ff;
+}
+.atlas-panel { max-width: 480px; }
+.atlas-stats { padding: 0 22px 10px; font-size: 12px; opacity: 0.8; }
+.atlas-zones { display: flex; gap: 10px; padding: 0 22px 14px; flex-wrap: wrap; }
+.atlas-zone {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: 16px; font-size: 12px;
+  border: 1px solid var(--btn-border); background: var(--btn-bg);
+}
+.atlas-zone.active { border-color: rgba(150, 210, 255, 0.8); color: #cdeeff; }
+.atlas-zone.locked { opacity: 0.45; }
+.atlas-zone-dot { font-size: 10px; }
+.atlas-section-title {
+  padding: 4px 22px 6px; font-size: 11px; letter-spacing: 1px;
+  text-transform: uppercase; opacity: 0.5;
+}
+.atlas-story { padding: 0 22px 12px; display: flex; flex-direction: column; gap: 6px; }
+.atlas-story-row { font-size: 12px; opacity: 0.88; line-height: 1.5; }
+.atlas-story-row.locked { opacity: 0.3; letter-spacing: 3px; }
+.atlas-quests { padding: 0 22px 22px; display: flex; flex-direction: column; gap: 6px; }
+.atlas-quest { font-size: 12px; display: flex; gap: 8px; opacity: 0.85; }
+.atlas-quest.done { opacity: 0.5; text-decoration: line-through; }
+.atlas-quest-mark { color: #8fd0ff; }

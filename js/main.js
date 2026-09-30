@@ -16,7 +16,7 @@ import { createShare } from './ui/share.js';
 import { createSettings } from './ui/settings.js';
 import { createCoach } from './ui/coach.js';
 import { createInteract, drawHoldRing } from './ui/interact.js';
-import { createBackground, createLightRays, createWaterSurface, createDepthHaze } from './systems/scenery.js';
+import { createBackground, createLightRays, createWaterSurface, createDepthHaze, setZoneProvider } from './systems/scenery.js';
 import { createDayNight } from './systems/dayNight.js';
 import { createFeeding } from './systems/feeding.js';
 import { createActivity } from './systems/activity.js';
@@ -29,6 +29,12 @@ import { createEconomy } from './gameplay/economy.js';
 import { createSpecialize } from './gameplay/specialize.js';
 import { createBreeding } from './gameplay/breeding.js';
 import { createLab } from './ui/lab.js';
+import { createExplore } from './gameplay/explore.js';
+import { createStory } from './gameplay/story.js';
+import { createZones } from './systems/zones.js';
+import { createQuests } from './systems/quests.js';
+import { createAtlas } from './ui/atlas.js';
+import { Secret, seedSecrets } from './entities/secret.js';
 import { dailyRareIndex } from './gameplay/daily.js';
 import { Jellyfish, JELLY_PALETTES } from './entities/jellyfish.js';
 import { FishSchool } from './entities/fish.js';
@@ -50,6 +56,7 @@ const bubbles = [];
 const seaweeds = [];
 const ripples = [];
 const baits = [];
+const secrets = [];
 
 // ---------- 子系统 ----------
 const audio = createAudio();
@@ -62,8 +69,8 @@ const stats = {
   fed: 0,        // 投喂次数
   mutations: 0,  // 变异次数
   breeds: 0,     // 繁育次数（阶段六）
-  get speciesFound() { return collection.found.size; },
-  get speciesTotal() { return collection.total; },
+  get speciesFound() { return collection ? collection.size : 0; },
+  get speciesTotal() { return collection ? collection.total : 6; },
 };
 
 const collection = createCollection(
@@ -138,6 +145,9 @@ const home = createHome({
     achievements.reset();
     economy.reset();
     specialize.reset();
+    explore.reset();
+    quests.reset();
+    zones.setZone('shallow', true);
     stats.summoned = 0;
     stats.fed = 0;
     stats.mutations = 0;
@@ -228,6 +238,7 @@ const hud = createHud({
   },
   isCurrentMode: () => current.mode,
   openLab: () => lab.toggle(),
+  openAtlas: () => atlas.toggle(),
   openSettings: () => settings.toggle(),
 });
 
@@ -257,6 +268,58 @@ const breeding = createBreeding({
 });
 
 const lab = createLab({ economy, specialize, getBreeds: () => stats.breeds });
+
+// ---------- 阶段七：海域 / 探索 / 叙事 / 目标 ----------
+const explore = createExplore(
+  (id, n) => {
+    hud.toastKey('explore.found', { n });
+    economy.gain(6);
+    quests.check(questCtx());
+    if (hud.refreshBio) hud.refreshBio(economy.bio);
+  },
+  (id) => {
+    hud.toastKey('zone.unlocked', { name: t('zone.' + id) });
+    // 解锁后立即布置该海域的秘密 + 推进故事
+    setupZoneContent(id);
+  },
+);
+const story = createStory(explore, (f) => {
+  hud.toastKey('story.reveal', { text: t(f.key) });
+});
+const zones = createZones(explore, stats);
+
+const quests = createQuests({
+  onComplete: (q) => {
+    hud.toastKey('quest.done', { name: t(q.label) });
+    economy.gain(q.reward);
+    if (hud.refreshBio) hud.refreshBio(economy.bio);
+  },
+});
+
+const atlas = createAtlas({ explore, zones, story, quests });
+setZoneProvider(zones);   // 背景 / 景深读取海域色调
+
+/** 目标判定上下文 */
+function questCtx() {
+  let shrines = 0;
+  for (const s of secrets) if (s.found && s.kind === 'shrine') shrines++;
+  return {
+    secrets: explore ? explore.count : 0,
+    shrines,
+    storyRead: story ? story.readCount : 0,
+    zone: zones ? zones.current : 'shallow',
+  };
+}
+
+/** 按海域布置秘密（清掉旧的未发现者，保留已发现的记录在 explore 中） */
+function setupZoneContent(zoneId) {
+  secrets.length = 0;
+  for (const s of seedSecrets(zoneId)) {
+    if (!explore.hasSecret(s.id)) secrets.push(s);
+  }
+  story.advance(zoneId);
+  quests.check(questCtx());
+}
 
 // ---------- 设置面板 ----------
 const settings = createSettings({
@@ -447,6 +510,19 @@ const interact = createInteract(canvas, {
       return;
     }
     const j = hitJellyfish(x, y);
+    // 优先检测秘密（贝壳 / 冥想点）
+    let hitSecret = null;
+    for (const s of secrets) {
+      if (!s.found && s.hit(x, y)) { hitSecret = s; break; }
+    }
+    if (hitSecret) {
+      hitSecret.found = true;
+      explore.discover(hitSecret.id);
+      ripples.push(new Celebrate(hitSecret.x, hitSecret.y, '255, 236, 170', 200));
+      audio.bubble();
+      save.markDirty();
+      return;
+    }
     if (j) {
       unlockJelly(j);
       const before = j.paletteIndex;
@@ -591,6 +667,24 @@ scheduler.add({
   id: 'breeding', order: 13,
   update: () => breeding.update(dtGlobal),
 });
+
+// ---------- 阶段七：秘密 / 海域 / 目标 / 叙事 ----------
+scheduler.add({
+  id: 'secrets', order: 4,
+  entities: secrets,
+});
+scheduler.add({
+  id: 'zones', order: 100,
+  update: () => {
+    zones.update(dtGlobal);
+    // 每帧评估解锁（轻量：仅比较阈值）
+    const best = zones.evaluate();
+    if (best !== zones.current) {
+      zones.setZone(best);
+      if (hud.refreshZone) hud.refreshZone(zones.label);
+    }
+  },
+});
 scheduler.add({
   id: 'holdring', order: 100,
   draw: (c) => {
@@ -691,6 +785,9 @@ function start() {
   hud.refreshButtons();
   if (hud.refreshBio) hud.refreshBio(economy.bio);
   lab.bind();
+  atlas.bind();
+  if (hud.refreshZone) hud.refreshZone(zones.label);
+  setupZoneContent(zones.current);
   if (hud.refreshActivity) hud.refreshActivity(false);
 
   // 恢复存档后立即评估一次（例如 déjà 满足的成就）

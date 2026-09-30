@@ -6,6 +6,31 @@
 import { TAU, isMobile } from '../core/config.js';
 import { view, theme, dayNight, quality } from '../core/state.js';
 
+/** 当前海域提供者（由 main 注入 zones 对象；默认中性） */
+let zoneTintProvider = null;
+export function setZoneProvider(z) { zoneTintProvider = z; }
+
+function zoneShift() {
+  if (!zoneTintProvider) return [0, 0, 0];
+  const t = zoneTintProvider.tint;
+  return Array.isArray(t) ? t : [0, 0, 0];
+}
+
+function shiftHex(hex, shift) {
+  const [r, g, b] = hexToRgb(hex);
+  const c = (v) => Math.max(0, Math.min(255, Math.round(v)));
+  return `rgb(${c(r + shift[0])},${c(g + shift[1])},${c(b + shift[2])})`;
+}
+
+/** 对已生成的 rgb(...) 字符串再叠加偏移 */
+function applyShift(rgbStr, shift) {
+  if (!shift[0] && !shift[1] && !shift[2]) return rgbStr;
+  const m = /rgb\((\d+),(\d+),(\d+)\)/.exec(rgbStr);
+  if (!m) return rgbStr;
+  const c = (v) => Math.max(0, Math.min(255, Math.round(v)));
+  return `rgb(${c(+m[1] + shift[0])},${c(+m[2] + shift[1])},${c(+m[3] + shift[2])})`;
+}
+
 /* ---------------- 背景 ---------------- */
 function hexToRgb(hex) {
   const h = hex.replace('#', '');
@@ -58,14 +83,24 @@ export function createBackground() {
       }
 
       const sun = dayNight.sun;
+      const shift = zoneShift();
+      const hasShift = shift[0] || shift[1] || shift[2];
       if (dayNight.enabled && sun < 0.995) {
         // 用插值色重画（仅在昼夜运行时，每帧 4 次 addColorStop，成本可接受）
         const t = sun; // 0 夜 -> 1 昼
         const g = ctx.createLinearGradient(0, 0, 0, view.H);
-        g.addColorStop(0, lerpHex('#04182f', th.bg[0], t));
-        g.addColorStop(0.3, lerpHex('#031326', th.bg[1], t));
-        g.addColorStop(0.65, lerpHex('#020c1c', th.bg[2], t));
-        g.addColorStop(1, lerpHex('#010610', th.bg[3], t));
+        g.addColorStop(0, applyShift(lerpHex('#04182f', th.bg[0], t), shift));
+        g.addColorStop(0.3, applyShift(lerpHex('#031326', th.bg[1], t), shift));
+        g.addColorStop(0.65, applyShift(lerpHex('#020c1c', th.bg[2], t), shift));
+        g.addColorStop(1, applyShift(lerpHex('#010610', th.bg[3], t), shift));
+        ctx.fillStyle = g;
+      } else if (hasShift) {
+        // 海域色调：在缓存基色上叠加偏移
+        const g = ctx.createLinearGradient(0, 0, 0, view.H);
+        g.addColorStop(0, shiftHex(th.bg[0], shift));
+        g.addColorStop(0.3, shiftHex(th.bg[1], shift));
+        g.addColorStop(0.65, shiftHex(th.bg[2], shift));
+        g.addColorStop(1, shiftHex(th.bg[3], shift));
         ctx.fillStyle = g;
       } else {
         ctx.fillStyle = cache;
@@ -143,7 +178,7 @@ export function createDepthHaze(entities) {
     order: 50,
     draw(ctx) {
       const th = theme.current;
-      const a = th.haze * (0.4 + dayNight.sun * 0.6);
+      const zoneMul = zoneTintProvider ? (zoneTintProvider.haze || 1) : 1;      const a = th.haze * (0.4 + dayNight.sun * 0.6) * zoneMul;
       if (a <= 0.005) return;
       ctx.fillStyle = `rgba(20, 110, 170, ${a})`;
       ctx.fillRect(0, 0, view.W, view.H);
