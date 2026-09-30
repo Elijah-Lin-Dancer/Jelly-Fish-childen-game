@@ -21,6 +21,7 @@ export function createPerf() {
   return {
     get fps() { return perf.fps; },
     disable() { enabled = false; },
+    enable() { enabled = true; },
 
     /** 每帧调用，dt 单位 ms */
     sample(dt) {

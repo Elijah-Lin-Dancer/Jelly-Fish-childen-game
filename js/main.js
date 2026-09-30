@@ -13,6 +13,8 @@ import { createHud } from './ui/hud.js';
 import { createHome } from './ui/home.js';
 import { createDex } from './ui/dex.js';
 import { createShare } from './ui/share.js';
+import { createSettings } from './ui/settings.js';
+import { createCoach } from './ui/coach.js';
 import { createInteract, drawHoldRing } from './ui/interact.js';
 import { createBackground, createLightRays, createWaterSurface, createDepthHaze } from './systems/scenery.js';
 import { createDayNight } from './systems/dayNight.js';
@@ -21,6 +23,7 @@ import { createActivity } from './systems/activity.js';
 import { createCollection } from './gameplay/collection.js';
 import { createSave } from './gameplay/save.js';
 import { createAchievements } from './gameplay/achievements.js';
+import { dailyRareIndex } from './gameplay/daily.js';
 import { Jellyfish, JELLY_PALETTES } from './entities/jellyfish.js';
 import { FishSchool } from './entities/fish.js';
 import { Turtle } from './entities/turtle.js';
@@ -150,20 +153,25 @@ const activity = createActivity(() => jellyfish, {
 });
 
 // ---------- HUD ----------
+/** 统一的声音开关（HUD 按钮与设置面板共用），返回最新状态 */
+function toggleSound() {
+  const on = audio.toggle();
+  const btn = document.getElementById('sound-btn');
+  if (btn) {
+    btn.textContent = on ? '🔊' : '🔇';
+    btn.classList.toggle('muted', !on);
+  }
+  return on;
+}
+
 const hud = createHud({
-  toggleSound: () => {
-    const on = audio.toggle();
-    const btn = document.getElementById('sound-btn');
-    if (btn) {
-      btn.textContent = on ? '🔊' : '🔇';
-      btn.classList.toggle('muted', !on);
-    }
-  },
+  toggleSound,
   toggleLang: () => {
     toggleLang();
     hud.refreshLang();
     hud.refreshButtons();
     home.refreshLang();
+    if (settings.isOpen) settings.render();
   },
   toggleTheme: () => {
     theme.toggle();
@@ -185,7 +193,21 @@ const hud = createHud({
     activity.toggle();
     hud.refreshButtons();
   },
+  openSettings: () => settings.toggle(),
 });
+
+// ---------- 设置面板 ----------
+const settings = createSettings({
+  toggleSound,
+  // 用户手动选画质后关闭自动降级；选"自动"时重新开启
+  onAutoQuality: (auto) => {
+    if (auto) perfMon.enable && perfMon.enable();
+    else perfMon.disable && perfMon.disable();
+  },
+});
+
+// ---------- 首次进入引导 ----------
+const coach = createCoach();
 
 // ---------- 世界生成 ----------
 const whale = new Whale((x, y) => {
@@ -250,6 +272,7 @@ function restorePond() {
   const params = save.restoreParams();
   if (!params || !params.length) {
     seedWorld(null);
+    ensureDailyRare();
     return;
   }
   clearWorld();
@@ -270,6 +293,34 @@ function restorePond() {
   for (let i = 0; i < quality.bubbles; i++) {
     bubbles.push(new Bubble(rand(0, view.W), rand(0, view.H)));
   }
+  ensureDailyRare();
+}
+
+/** 确保今日稀有客在池塘中存在一只（确定性，不重复添加） */
+function ensureDailyRare() {
+  const idx = dailyRareIndex();
+  if (jellyfish.some((j) => j.rare)) return;
+  // 若已存在同色普通个体，将其升级为稀有客，避免外形重复
+  let host = jellyfish.find((j) => j.paletteIndex === idx && !j.mutated);
+  if (host) {
+    host.rare = true;
+  } else {
+    const j = new Jellyfish(undefined, undefined, idx, { rare: true });
+    jellyfish.push(j);
+  }
+  save.markDirty();
+}
+
+/** 进入池塘时若今日尚未见过稀有客，提示一次 */
+function maybeAnnounceRare() {
+  try {
+    const k = 'ocean.rareDay';
+    const today = String(dailyRareIndex()) + '-' + new Date().toDateString();
+    if (localStorage.getItem(k) !== today) {
+      localStorage.setItem(k, today);
+      setTimeout(() => hud.toast('daily.rare'), 1600);
+    }
+  } catch (e) { /* 忽略 */ }
 }
 
 // ---------- 生成 / 爆裂 ----------
@@ -543,6 +594,8 @@ function start() {
     });
   });
   dex.bind();
+  settings.bind();
+  settings.init();
   hud.refreshDex();
   hud.refreshPhase();
   hud.refreshTheme();
@@ -561,6 +614,12 @@ function start() {
   // 首页：欢迎页 + 池塘命名
   home.bind();
   home.show();
+
+  // 首次进入引导（只显示一次），在进入池塘后弹出
+  home.onEnter(() => {
+    coach.start();
+    maybeAnnounceRare();
+  });
 
   requestAnimationFrame((t) => {
     if (loaderEl) {

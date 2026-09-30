@@ -42,11 +42,33 @@
   <div class="btn" id="daynight-btn" role="button" tabindex="0" data-i18n-title="btn.daynight" aria-label="Day-night">🕐</div>
   <div class="btn" id="sound-btn" role="button" tabindex="0" data-i18n-title="btn.sound" aria-label="Sound">🔇</div>
   <div class="btn" id="lang-btn" role="button" tabindex="0" data-i18n-title="btn.lang" aria-label="Language">EN</div>
+  <div class="btn" id="settings-btn" role="button" tabindex="0" data-i18n-title="btn.settings" aria-label="Settings">⚙</div>
 </div>
 
 <div class="hud hud-bottom-left">
   <div><span data-i18n="brand">JELLYFISH OCEAN · IMMERSIVE</span></div>
   <div><span id="theme-text" data-i18n="theme.shallow">Sunlit Shallows</span> · <span id="fps-text">60 FPS</span></div>
+</div>
+
+<div class="dex-modal hide" id="settings-modal">
+  <div class="dex-panel settings-panel">
+    <div class="dex-head">
+      <div class="dex-head-title" id="settings-title">Settings</div>
+      <div class="dex-close" id="settings-close" role="button" tabindex="0" aria-label="Close">✕</div>
+    </div>
+    <div class="settings-row">
+      <div class="settings-label" id="settings-tier-label">Quality</div>
+      <div class="seg-group" id="settings-tier"></div>
+    </div>
+    <div class="settings-row">
+      <div class="settings-label" id="settings-motion-label">Reduce motion</div>
+      <div class="switch" id="settings-motion" role="switch" tabindex="0" aria-label="Reduce motion"><span class="knob"></span></div>
+    </div>
+    <div class="settings-row">
+      <div class="settings-label" id="settings-sound-label">Sound</div>
+      <div class="switch" id="settings-sound" role="switch" tabindex="0" aria-label="Sound"><span class="knob"></span></div>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>

@@ -21,6 +21,7 @@ function serialize(j) {
     m: j.mutated ? 1 : 0,
     n: j.interactions | 0,
     a: Math.round(j.age),
+    r: j.rare ? 1 : 0,
   };
 }
 
@@ -71,6 +72,7 @@ export function createSave(getJellyfish) {
         mutated: !!d.m,
         interactions: +d.n || 0,
         age: +d.a || 0,
+        rare: !!d.r,
       }));
   }
 

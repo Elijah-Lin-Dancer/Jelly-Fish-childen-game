@@ -29,6 +29,7 @@ export const LOCALES = {
     'btn.daynight': 'Pause / resume day-night cycle',
     'btn.nest': 'Bring jellyfish home',
     'btn.share': 'Save postcard',
+    'btn.settings': 'Settings',
 
     'dex.label': '{n}/{total} species found',
     'dex.new': 'New species!',
@@ -68,6 +69,23 @@ export const LOCALES = {
     'share.saved': '📸 Postcard saved',
     'share.fail': 'Could not save postcard',
     'activity.success': '🎯 Jellyfish came home!',
+
+    'settings.title': 'Settings',
+    'settings.quality': 'Quality',
+    'settings.quality.auto': 'Auto',
+    'settings.quality.high': 'High',
+    'settings.quality.medium': 'Medium',
+    'settings.quality.low': 'Low',
+    'settings.reduceMotion': 'Reduce motion',
+    'settings.sound': 'Sound',
+
+    'coach.step1': '👆 Move your pointer to attract jellyfish',
+    'coach.step2': '✋ Hold to summon a new jellyfish — tap to unlock species',
+    'coach.next': 'Next',
+    'coach.got': 'Got it',
+    'coach.skip': 'Skip',
+
+    'daily.rare': '✨ A rare visitor appeared!',
 
     'theme.shallow': 'Sunlit Shallows',
     'theme.deep': 'Deep Dive',
@@ -112,6 +130,7 @@ export const LOCALES = {
     'btn.daynight': '暂停 / 继续昼夜循环',
     'btn.nest': '引水母归巢',
     'btn.share': '保存明信片',
+    'btn.settings': '设置',
 
     'dex.label': '已发现 {n}/{total} 种',
     'dex.new': '新物种！',
@@ -151,6 +170,23 @@ export const LOCALES = {
     'share.saved': '📸 明信片已保存',
     'share.fail': '明信片保存失败',
     'activity.success': '🎯 水母回家啦！',
+
+    'settings.title': '设置',
+    'settings.quality': '画质',
+    'settings.quality.auto': '自动',
+    'settings.quality.high': '高',
+    'settings.quality.medium': '中',
+    'settings.quality.low': '低',
+    'settings.reduceMotion': '减弱动效',
+    'settings.sound': '声音',
+
+    'coach.step1': '👆 移动鼠标 / 手指吸引水母',
+    'coach.step2': '✋ 长按召唤新水母 — 点击可解锁物种',
+    'coach.next': '下一步',
+    'coach.got': '知道了',
+    'coach.skip': '跳过',
+
+    'daily.rare': '✨ 今日稀有客现身了！',
 
     'theme.shallow': '阳光浅海',
     'theme.deep': '深邃夜潜',

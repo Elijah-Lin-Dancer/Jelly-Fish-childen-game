@@ -35,6 +35,7 @@ export class Jellyfish {
     this.growthTarget = 1;
     this.mutated = false;
     this.interactions = 0;
+    this.rare = opts.rare === true;   // 每日稀有客
 
     this.vx = rand(-0.3, 0.3);
     this.vy = rand(-0.2, 0.1);
@@ -66,6 +67,7 @@ export class Jellyfish {
     if (typeof r.scale === 'number') this.scale = clamp(r.scale, 0.4, 1.6);
     if (typeof r.age === 'number') this.age = Math.max(0, r.age);
     if (typeof r.interactions === 'number') this.interactions = Math.max(0, r.interactions | 0);
+    if (r.rare) this.rare = true;
     if (r.mutated) {
       this.mutated = true;
       // 变异个体：多两根触须，与 mutate() 表现一致
@@ -300,6 +302,28 @@ export class Jellyfish {
       ctx.beginPath();
       ctx.arc(0, 0, r * 1.5, 0, TAU);
       ctx.stroke();
+    }
+
+    // 每日稀有客：金色缓旋光环 + 星点
+    if (this.rare) {
+      ctx.globalCompositeOperation = 'lighter';
+      const spin = this.age * 0.001;
+      ctx.strokeStyle = 'rgba(255, 216, 77, 0.75)';
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([6, 9]);
+      ctx.lineDashOffset = -spin * 40;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 1.85, 0, TAU);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      for (let i = 0; i < 3; i++) {
+        const a = spin * 2 + (i / 3) * TAU;
+        ctx.fillStyle = 'rgba(255, 240, 170, 0.9)';
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * r * 1.85, Math.sin(a) * r * 1.85, 2.2, 0, TAU);
+        ctx.fill();
+      }
+      ctx.globalCompositeOperation = 'source-over';
     }
 
     ctx.restore();

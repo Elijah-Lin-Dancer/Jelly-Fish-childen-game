@@ -42,6 +42,7 @@ export function createHome({ onStart, onToast, onReset } = {}) {
 
   let custom = readCustomName();
   let entered = false;
+  let enterHook = null;
 
   /** 当前应显示的名称：自定义优先，否则用默认（跟随语言） */
   function displayName() {
@@ -94,7 +95,11 @@ export function createHome({ onStart, onToast, onReset } = {}) {
       entered = true;
       if (onStart) onStart(); // 首次进入：解锁音频等
     }
+    if (enterHook) enterHook();   // 每次进入（用于引导 / 每日稀有客提示）
   }
+
+  /** 注册"进入池塘"回调（可后于构造设置） */
+  function onEnter(fn) { enterHook = fn; }
 
   /** 游玩界面点击标题改名 */
   function rename() {
@@ -146,5 +151,5 @@ export function createHome({ onStart, onToast, onReset } = {}) {
     syncTitle();
   }
 
-  return { show, hide, bind, refreshLang, syncTitle, get name() { return displayName(); } };
+  return { show, hide, bind, refreshLang, syncTitle, onEnter, get name() { return displayName(); } };
 }

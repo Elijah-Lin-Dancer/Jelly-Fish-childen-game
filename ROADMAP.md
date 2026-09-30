@@ -77,8 +77,6 @@
 ### 2.2 成就系统（`js/gameplay/achievements.js` 新增）
 
 - 成就定义（data 驱动，易扩展）：
-
-
   | id             | 触发      | toast  |
   | -------------- | ------- | ------ |
   | `first_mutate` | 首次变异    | 初次变异！  |
@@ -126,6 +124,8 @@
 | 每日稀有客 | 按日期种子确定当日限定配色水母（确定性、可复现）               | `main.spawnJellyfish` 加 `dailyRare` 判定 |
 | 首次引导  | 首页加一句目标文案；首次进入 2 步 coach mark          | `ui/home.js` / `locales`               |
 | 无障碍   | 按钮 `aria-label` 已部分有；补足键盘可达 + focus 样式 | `css/main.css`                         |
+
+
 
 ---
 

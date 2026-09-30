@@ -24,6 +24,7 @@ export function createHud(actions) {
     achText: document.getElementById('ach-text'),
     nestBtn: document.getElementById('nest-btn'),
     shareBtn: document.getElementById('share-btn'),
+    settingsBtn: document.getElementById('settings-btn'),
   };
 
   let toastTimer = null;
@@ -99,6 +100,7 @@ export function createHud(actions) {
     if (el.dnBtn) el.dnBtn.addEventListener('click', () => actions.toggleDayNight());
     if (el.nestBtn) el.nestBtn.addEventListener('click', () => actions.toggleActivity && actions.toggleActivity());
     if (el.shareBtn) el.shareBtn.addEventListener('click', () => actions.share && actions.share());
+    if (el.settingsBtn) el.settingsBtn.addEventListener('click', () => actions.openSettings && actions.openSettings());
     if (el.dex) {
       el.dex.addEventListener('click', () => actions.openDex && actions.openDex());
       el.dex.addEventListener('keydown', (e) => {
