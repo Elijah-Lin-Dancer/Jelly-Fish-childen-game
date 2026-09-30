@@ -306,17 +306,18 @@ const atlas = createAtlas({ explore, zones, story, quests });
 setZoneProvider(zones);   // 背景 / 景深读取海域色调
 
 // ---------- 隐藏纪念内容（Bogyó） ----------
+// 他不是水母：独立实体 + 独立调度条目，不进入 jellyfish 数组，
+// 因而不参与洋流 / 繁育 / 图鉴 / 存档。
 let bogyo = null;
 
 /** 把 Bogyó 放进海洋（已存在则不重复添加） */
 function spawnBogyo(announce = true) {
-  if (bogyo && jellyfish.includes(bogyo)) return bogyo;
+  if (bogyo) return bogyo;
   const c = memory.content;
   bogyo = new Bogyo(rand(view.W * 0.25, view.W * 0.75), rand(view.H * 0.3, view.H * 0.6), {
     palette: c.palette,
     name: c.name,
   });
-  jellyfish.push(bogyo);
   if (announce) {
     ripples.push(new Celebrate(bogyo.x, bogyo.y, '255, 214, 150', 260));
     for (let i = 0; i < 24; i++) {
@@ -522,6 +523,15 @@ function hitJellyfish(x, y) {
   return hit;
 }
 
+/** 命中 Bogyó（猫：用他的身高而不是伞盖半径判定） */
+function hitBogyo(x, y) {
+  if (!bogyo) return false;
+  const dx = x - bogyo.x;
+  const dy = y - bogyo.y;
+  const rr = bogyo.r * bogyo.scale * 1.8;
+  return dx * dx + dy * dy < rr * rr;
+}
+
 function unlockJelly(j) {
   if (!j || j.egg || j.isMemory) return;   // 隐藏纪念水母不收录图鉴
   const idx = j.paletteIndex;
@@ -546,6 +556,14 @@ const interact = createInteract(canvas, {
       return;
     }
     const j = hitJellyfish(x, y);
+    // Bogyó 优先级最高：他是一只小猫，点他应该有回应
+    if (hitBogyo(x, y)) {
+      bogyo.tap();
+      hud.toastText(bogyo.name);
+      audio.bubble();
+      createBurst(x, y);
+      return;
+    }
     // 优先检测秘密（贝壳 / 冥想点）
     let hitSecret = null;
     for (const s of secrets) {
@@ -591,6 +609,13 @@ const interact = createInteract(canvas, {
     createBurst(x, y);
   },
   onHold: (x, y) => {
+    // 长按 Bogyó：他会撒娇蹭一蹭（不召唤新水母）
+    if (hitBogyo(x, y)) {
+      bogyo.nuzzleMe();
+      audio.bubble();
+      ripples.push(new Ripple(bogyo.x, bogyo.y));
+      return;
+    }
     spawnJellyfish(x, y, true);
   },
   onDrag: (x, y, dx, dy) => {
@@ -710,6 +735,13 @@ scheduler.add({
 scheduler.add({
   id: 'breeding', order: 13,
   update: () => breeding.update(dtGlobal),
+});
+
+// ---------- 隐藏纪念内容：Bogyó（独立于水母系统） ----------
+scheduler.add({
+  id: 'bogyo', order: 14,
+  update: () => { if (bogyo) bogyo.update(dtGlobal, tGlobal); },
+  draw: (c) => { if (bogyo) bogyo.draw(c); },
 });
 
 // ---------- 阶段七：秘密 / 海域 / 目标 / 叙事 ----------
