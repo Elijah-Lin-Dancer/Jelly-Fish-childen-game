@@ -138,6 +138,31 @@ body {
   letter-spacing: 1px;
 }
 
+/* 成就星标 */
+.hud-top-right .ach {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  transition: border-color 0.4s, color 0.4s, background 0.2s, transform 0.15s;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.hud-top-right .ach:hover { background: var(--btn-bg-hover); transform: scale(1.05); }
+.hud-top-right .ach.complete {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 14px rgba(255, 216, 77, 0.3);
+}
+
 /* 右下：按钮组 */
 .hud-bottom-right {
   bottom: calc(14px + var(--safe-b));

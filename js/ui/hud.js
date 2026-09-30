@@ -20,6 +20,8 @@ export function createHud(actions) {
     soundBtn: document.getElementById('sound-btn'),
     langBtn: document.getElementById('lang-btn'),
     dnBtn: document.getElementById('daynight-btn'),
+    ach: document.getElementById('ach'),
+    achText: document.getElementById('ach-text'),
   };
 
   let toastTimer = null;
@@ -63,6 +65,15 @@ export function createHud(actions) {
     if (el.themeText) el.themeText.textContent = t('theme.' + theme.name);
   }
 
+  /** 刷新成就星标 n/total */
+  function refreshAch(n) {
+    if (n == null) return;
+    if (el.achText) {
+      el.achText.textContent = t('ach.label', { n, total: 6 });
+    }
+    if (el.ach) el.ach.classList.toggle('complete', n >= 6);
+  }
+
   function refreshButtons() {
     if (el.feedBtn) el.feedBtn.classList.toggle('active', !!actions.isFeedMode && actions.isFeedMode());
     if (el.langBtn) el.langBtn.textContent = app.lang === 'zh' ? '中' : 'EN';
@@ -73,7 +84,6 @@ export function createHud(actions) {
   function refreshLang() {
     refreshDex(); refreshPhase(); refreshTheme();
   }
-
   function bind() {
     if (el.soundBtn) el.soundBtn.addEventListener('click', () => actions.toggleSound());
     if (el.langBtn) el.langBtn.addEventListener('click', () => actions.toggleLang());
@@ -91,9 +101,18 @@ export function createHud(actions) {
     }
   }
 
+  /** 绑定成就星标点击（回调由 main 注入，避免循环依赖） */
+  function bindAch(onClick) {
+    if (!el.ach) return;
+    el.ach.addEventListener('click', onClick);
+    el.ach.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); }
+    });
+  }
+
   function setFps(v) {
     if (el.fps) el.fps.textContent = t('fps', { n: v });
   }
 
-  return { bind, refreshDex, refreshPhase, refreshTheme, refreshButtons, refreshLang, toast, toastKey, setFps, el };
+  return { bind, bindAch, refreshDex, refreshPhase, refreshTheme, refreshAch, refreshButtons, refreshLang, toast, toastKey, setFps, el };
 }

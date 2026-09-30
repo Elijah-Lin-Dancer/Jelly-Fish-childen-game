@@ -127,6 +127,43 @@ export class Ripple {
   }
 }
 
+/* ---------------- 庆祝光环（变异 / 成就时扩散） ---------------- */
+export class Celebrate {
+  constructor(x, y, color = '255, 216, 77', maxR = 220) {
+    this.x = x; this.y = y;
+    this.r = 6;
+    this.maxR = maxR;
+    this.life = 1;
+    this.color = color;
+  }
+
+  update(dt) {
+    const dtScale = dt / 16.667;
+    this.r += 5.5 * dtScale;
+    this.life = 1 - this.r / this.maxR;
+    return this.life > 0;
+  }
+
+  draw(ctx) {
+    const l = Math.max(0, this.life);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    // 主环 + 内环，营造双圈扩散的礼花感
+    ctx.strokeStyle = `rgba(${this.color}, ${l * 0.85})`;
+    ctx.lineWidth = 3 + l * 3;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r, 0, TAU);
+    ctx.stroke();
+
+    ctx.strokeStyle = `rgba(255, 255, 255, ${l * 0.5})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r * 0.62, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
 /* ---------------- 饵料（新增） ---------------- */
 export class Bait {
   constructor(x, y) {

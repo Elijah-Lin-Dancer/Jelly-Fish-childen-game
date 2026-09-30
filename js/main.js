@@ -18,11 +18,12 @@ import { createDayNight } from './systems/dayNight.js';
 import { createFeeding } from './systems/feeding.js';
 import { createCollection } from './gameplay/collection.js';
 import { createSave } from './gameplay/save.js';
+import { createAchievements } from './gameplay/achievements.js';
 import { Jellyfish, JELLY_PALETTES } from './entities/jellyfish.js';
 import { FishSchool } from './entities/fish.js';
 import { Turtle } from './entities/turtle.js';
 import { Whale } from './entities/whale.js';
-import { Plankton, Bubble, Seaweed, Ripple, Bait } from './entities/env.js';
+import { Plankton, Bubble, Seaweed, Ripple, Bait, Celebrate } from './entities/env.js';
 
 // ---------- 画布 ----------
 const canvas = document.getElementById('ocean-canvas');
@@ -44,6 +45,15 @@ const audio = createAudio();
 const perfMon = createPerf();
 const collision = { spawned: 0 };
 
+// ---------- 统计（成就判定用） ----------
+const stats = {
+  summoned: 0,   // 召唤的水母数
+  fed: 0,        // 投喂次数
+  mutations: 0,  // 变异次数
+  get speciesFound() { return collection.found.size; },
+  get speciesTotal() { return collection.total; },
+};
+
 const collection = createCollection(
   (idx) => {
     hud.toast('dex.new');
@@ -52,16 +62,25 @@ const collection = createCollection(
     for (const j of jellyfish) {
       if (j.paletteIndex === idx) j.flash = 1;
     }
+    // 午夜邂逅新种 -> 成就
+    achievements.check(stats, { type: 'unlock', phase: dayNight.sun < 0.4 ? 'night' : 'day' });
   },
   () => {
     hud.toast('dex.complete');
     hud.refreshDex();
     spawnEggJelly();
+    achievements.check(stats, { type: 'dex' });
   }
 );
 
 // 池塘存档：把当前水母落盘，重开即"你的池塘"
 const save = createSave(() => jellyfish);
+
+// 成就系统：解锁时弹 toast + 更新 HUD 星标
+const achievements = createAchievements((a) => {
+  hud.toastKey('ach.unlocked', { name: t(a.label) });
+  hud.refreshAch(achievements.count);
+});
 
 function spawnEggJelly() {
   const j = new Jellyfish(view.W / 2, view.H / 2, 0, {});
@@ -77,6 +96,8 @@ function spawnEggJelly() {
 
 const feeding = createFeeding(baits, (x, y) => {
   audio.bubble();
+  stats.fed++;
+  achievements.check(stats, { type: 'feed' });
 });
 
 // ---------- 首页（欢迎 + 池塘命名） ----------
@@ -90,11 +111,16 @@ const home = createHome({
     if (!window.confirm(t('pond.reset.confirm'))) return false;
     save.reset();
     collection.reset();
+    achievements.reset();
+    stats.summoned = 0;
+    stats.fed = 0;
+    stats.mutations = 0;
     clearWorld();
     seedWorld(null);
     save.markDirty();
     save.write();
     hud.refreshDex();
+    hud.refreshAch(0);
     dex.render();
     return true;
   },
@@ -229,6 +255,9 @@ function spawnJellyfish(x, y, juvenile) {
   jellyfish.push(j);
   audio.bubble();
   save.markDirty();
+  // 召唤统计 + 成就（breeder=30 / summoner=25 都靠它）
+  stats.summoned++;
+  achievements.check(stats, { type: 'summon' });
   return j;
 }
 
@@ -285,13 +314,16 @@ const interact = createInteract(canvas, {
       const before = j.paletteIndex;
       const mutated = j.interact();
       if (mutated) {
-        // 变异事件：醒目提示前后配色名
+        // 变异事件：醒目提示前后配色名 + 扩散光环
+        stats.mutations++;
         hud.toastKey('jelly.mutated', {
           from: t('jelly.' + JELLY_PALETTES[before].key),
           to: t('jelly.' + j.palette.key),
         });
+        ripples.push(new Celebrate(j.x, j.y, '255, 216, 77', 240));
         collection.recordMutation(j.paletteIndex, before);
         dex.render();
+        achievements.check(stats, { type: 'mutation' });
       } else if (!j.egg) {
         collection.see(j.paletteIndex);
       }
@@ -467,11 +499,28 @@ function start() {
   applyI18n();
   bindVisibility();
   hud.bind();
+  hud.bindAch(() => {
+    // 点击星标显示成就列表（用 toast 依次提示已解锁项）
+    const list = achievements.list.filter((a) => achievements.has(a.id));
+    if (!list.length) {
+      hud.toast('ach.none');
+      return;
+    }
+    hud.toastKey('ach.summary', {
+      n: achievements.count,
+      total: achievements.total,
+      names: list.map((a) => t(a.label)).join(' · '),
+    });
+  });
   dex.bind();
   hud.refreshDex();
   hud.refreshPhase();
   hud.refreshTheme();
+  hud.refreshAch(achievements.count);
   hud.refreshButtons();
+
+  // 恢复存档后立即评估一次（例如 déjà 满足的成就）
+  achievements.check(stats, { type: 'init' });
 
   // 优先恢复上次的池塘；无存档则生成新世界
   restorePond();
