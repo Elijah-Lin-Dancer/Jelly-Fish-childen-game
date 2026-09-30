@@ -179,6 +179,8 @@ export function createHome({
 
   return {
     show, hide, bind, refreshLang, syncTitle, onEnter, onLang,
+    /** 供「新建世界」面板调用：收掉标题屏并触发 onStart（含音频解锁） */
+    enter,
     get name() { return displayName(); },
     /** 供外部（创建面板）设置池塘名 */
     setName(v) {

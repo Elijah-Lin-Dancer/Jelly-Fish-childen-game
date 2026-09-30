@@ -3,12 +3,13 @@
 // ============================================================
 
 import { rand, TAU } from '../core/config.js';
-import { view } from '../core/state.js';
+import { WORLD } from '../systems/terrain.js';
 
 export class Turtle {
-  constructor() {
-    this.x = rand(0, view.W);
-    this.y = rand(view.H * 0.2, view.H * 0.7);
+  // 阶段十一：海龟改为世界坐标，在整张地图上巡游（不再只在一个视口里打转）
+  constructor(x, y) {
+    this.x = x ?? rand(WORLD.x0, WORLD.x1);
+    this.y = y ?? rand(WORLD.y0 + WORLD.h * 0.25, WORLD.y0 + WORLD.h * 0.6);
     this.vx = rand(0.4, 0.9) * (Math.random() < 0.5 ? 1 : -1);
     this.dir = this.vx > 0 ? 1 : -1;
     this.flap = 0;
@@ -20,8 +21,9 @@ export class Turtle {
     this.flap += 0.06 * dtScale;
     this.x += this.vx * dtScale;
     this.y += Math.sin(this.flap * 0.5) * 0.2 * dtScale;
-    if (this.x < -80) { this.x = view.W + 80; this.dir = 1; this.vx = Math.abs(this.vx); }
-    if (this.x > view.W + 80) { this.x = -80; this.dir = -1; this.vx = -Math.abs(this.vx); }
+    // 环绕边界用「可见世界」的两端，走出左边界就从右边界回来
+    if (this.x < WORLD.x0 - 120) { this.x = WORLD.x1 + 120; this.dir = 1; this.vx = Math.abs(this.vx); }
+    if (this.x > WORLD.x1 + 120) { this.x = WORLD.x0 - 120; this.dir = -1; this.vx = -Math.abs(this.vx); }
     return true;
   }
 

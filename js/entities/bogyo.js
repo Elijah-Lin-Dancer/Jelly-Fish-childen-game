@@ -29,10 +29,12 @@ export class Bogyo {
     this.name = opts.name || 'Bogyó';
     this.palette = opts.palette || { core: '#f7b06a', glow: '#ff8f3c', tent: '#fff0e0' };
 
-    this.x = x ?? view.W * 0.5;
-    this.y = y ?? view.H * 0.45;
+    // 阶段十一：世界坐标。默认落在相机可见范围中央偏上
+    this.x = x ?? (camera.x + camera.vw * 0.5);
+    this.y = y ?? (camera.y + camera.vh * 0.45);
     // 体型：比水母小一号（他还是只 4 岁的小猫）
     this.baseR = clamp(Math.min(view.W, view.H) * 0.052, 26, 46);
+    // 世界坐标下 r 是固定世界尺度，屏幕观感由相机缩放决定
     this.r = this.baseR;
     this.scale = 0.5;      // 出场成长动画
     this.age = 0;
@@ -110,19 +112,27 @@ export class Bogyo {
 
     // 边界
     const rr = this.r * this.scale * 2;
-    if (this.y < -rr) this.y = view.H + rr;
-    if (this.y > view.H + rr) this.y = -rr;
-    if (this.x < -rr * 2) this.x = view.W + rr * 2;
-    if (this.x > view.W + rr * 2) this.x = -rr * 2;
+    if (this.y < WORLD.y0 - rr) this.y = WORLD.y1 + rr;
+    if (this.y > WORLD.y1 + rr) this.y = WORLD.y0 - rr;
+    if (this.x < WORLD.x0 - rr * 2) this.x = WORLD.x1 + rr * 2;
+    if (this.x > WORLD.x1 + rr * 2) this.x = WORLD.x0 - rr * 2;
 
     return true;
   }
 
+  /** 指针的世界坐标。阶段十一：指针是屏幕坐标，凡是要与水母/他本人
+   *  比较距离的地方都必须先过这一层，否则一拖动视角他就「找不到人」。 */
+  _pointerWorld() {
+    if (!pointer.active || camera.dragging) return null;
+    return screenToWorld(pointer.x, pointer.y);
+  }
+
   /** 状态决策：指针靠近追，久无人理打盹，点他附近扑 */
   _decide(dt, t) {
-    const dx = pointer.x - this.x;
-    const dy = pointer.y - this.y;
-    const d = Math.hypot(dx, dy);
+    const pw = this._pointerWorld();
+    const dx = pw ? pw.x - this.x : 0;
+    const dy = pw ? pw.y - this.y : 0;
+    const d = pw ? Math.hypot(dx, dy) : Infinity;
 
     if (this.state === S_POUNCE) {
       this.pounceT -= dt;
@@ -178,7 +188,8 @@ export class Bogyo {
     let ax = 0, ay = 0;
 
     if (this.state === S_FOLLOW) {
-      const dx = pointer.x - this.x, dy = pointer.y - this.y;
+      const pw = this._pointerWorld();
+      const dx = pw ? pw.x - this.x : 0, dy = pw ? pw.y - this.y : 0;
       const d = Math.hypot(dx, dy) || 1;
       const f = clamp(d / 200, 0.35, 1.15);
       ax += (dx / d) * 0.16 * f;
@@ -196,7 +207,7 @@ export class Bogyo {
       // 悠然：轻微漂移 + 划水划出的小推力
       ax += Math.sin(this.sway) * 0.02;
       ay += Math.sin(this.sway * 0.7 + 1.3) * 0.014;
-      const midY = view.H * 0.5;
+      const midY = camera.y + camera.vh * 0.5;
       ay += Math.sign(midY - this.y) * 0.006;
     }
 
@@ -218,7 +229,8 @@ export class Bogyo {
 
     // 朝向：跟随指针方向
     if (this.state === S_FOLLOW) {
-      const dx = pointer.x - this.x;
+      const pw = this._pointerWorld();
+      const dx = pw ? pw.x - this.x : 0;
       if (Math.abs(dx) > 12) this.face = dx >= 0 ? 1 : -1;
     } else if (Math.abs(this.vx) > 0.15) {
       this.face = this.vx >= 0 ? 1 : -1;

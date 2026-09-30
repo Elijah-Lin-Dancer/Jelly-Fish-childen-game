@@ -10,6 +10,35 @@ export const view = { W: 0, H: 0 };
 /** 指针状态 */
 export const pointer = { x: -9999, y: -9999, active: false, down: false };
 
+// ============================================================
+//  相机（Phase 11 开放世界）
+// ------------------------------------------------------------
+//  世界坐标 → 屏幕坐标： screen = (world - camera) * scale
+//  世界尺寸固定 6000 × 1600，做法是「把世界当视口铺满」——
+//  scale = max(view.W / WORLD.w, view.H / WORLD.h)，保证世界永远填满窗口、
+//  不露黑边；相机被夹在 [0, WORLD.w - view.W/scale] 内。
+//  这样地形的所有常数都与分辨率无关，手机 / 桌面得到的是同一个世界。
+// ============================================================
+export const camera = {
+  x: 0,
+  y: 0,
+  tx: 0, // 缓动目标
+  ty: 0,
+  scale: 1,
+};
+
+/** 键盘移动意图（-1..1），由 main.js 的键盘监听写入 */
+export const camInput = { x: 0, y: 0 };
+
+/** 相机平移速度（世界单位 / 秒） */
+export const CAM_SPEED = 620;
+
+/** 缓动速率：越大越跟手 */
+export const CAM_EASE = 9;
+
+/** 边界阻尼强度（0..1）：越大越硬 */
+export const CAM_DAMP = 0.86;
+
 /** 当前性能等级索引 */
 export const perf = { tier: 0, fps: 60, samples: [], lowStreak: 0, highStreak: 0 };
 

@@ -4,7 +4,8 @@
 // ============================================================
 
 import { rand, TAU, damp, clamp } from '../core/config.js';
-import { pointer, view, theme, dayNight } from '../core/state.js';
+import { pointer, view, theme, dayNight, camera, screenToWorld, screenRadius } from '../core/state.js';
+import { WORLD } from '../systems/terrain.js';
 import { randomTraits, normalizeTraits } from '../gameplay/genes.js';
 
 /** 六种配色（name 供图鉴使用） */
@@ -57,14 +58,19 @@ export function weightedPaletteIndex(weightFn, exclude) {
 
 export class Jellyfish {
   constructor(x, y, paletteIndex, opts = {}) {
-    this.x = x ?? rand(view.W * 0.05, view.W * 0.95);
-    this.y = y ?? rand(view.H * 0.12, view.H * 0.88);
+    // 阶段十一：世界坐标。未指定位置时撒在「相机可见的水域」里，
+    // 保证新生成的水母立刻出现在玩家眼前，而不是跑到地图另一头。
+    const vx0 = camera.x;
+    const vy0 = camera.y;
+    this.x = x ?? rand(vx0, vx0 + camera.vw);
+    this.y = y ?? rand(vy0, vy0 + camera.vh);
     this.paletteIndex = paletteIndex ?? ((Math.random() * JELLY_PALETTES.length) | 0);
     this.palette = JELLY_PALETTES[this.paletteIndex];
 
     const juvenile = opts.juvenile === true;
-    // 按视口尺寸缩放，小屏水母不至于过大
-    const scaleRef = Math.min(1, Math.max(0.52, Math.min(view.W, view.H) / 720));
+    // 阶段十一：世界坐标下相机缩放自动处理「小屏显得太大」的问题，
+    // 这里只保留一点尺寸参考，让极小的视口不至于挤满。
+    const scaleRef = Math.min(1, Math.max(0.72, Math.min(view.W, view.H) / 720));
     this.r = (juvenile ? rand(10, 14) : rand(22, 48)) * scaleRef;
     this.baseR = this.r;
 
@@ -249,7 +255,7 @@ export class Jellyfish {
       this.x += this.vx * dtScale;
       this.y += this.vy * dtScale;
       const rr0 = this.r * this.scale;
-      if (this.y > view.H - rr0) { this.y = view.H - rr0; this.vy = 0; }
+      if (this.y > WORLD.y1 - rr0) { this.y = WORLD.y1 - rr0; this.vy = 0; }
       this.pulse = (Math.sin(this.phase) + 1) * 0.5;
       this.attract *= Math.pow(0.85, dtScale);
       return true;
@@ -257,14 +263,17 @@ export class Jellyfish {
 
     const pulse = (Math.sin(this.phase) + 1) * 0.5;
 
-    // 指针吸引
-    if (pointer.active) {
-      const dx = pointer.x - this.x;
-      const dy = pointer.y - this.y;
+    // 指针吸引（阶段十一：指针是屏幕坐标，先转到世界坐标再算距离，
+    // 吸引半径也要除以相机缩放，这样不同缩放下「手感」一致）
+    if (pointer.active && !camera.dragging) {
+      const pw = screenToWorld(pointer.x, pointer.y);
+      const reach = screenRadius(260);
+      const dx = pw.x - this.x;
+      const dy = pw.y - this.y;
       const d2 = dx * dx + dy * dy;
-      if (d2 < 260 * 260) {
+      if (d2 < reach * reach) {
         const d = Math.sqrt(d2) || 1;
-        const f = (1 - d / 260) * 0.15 * dtScale;
+        const f = (1 - d / reach) * 0.15 * dtScale;
         this.vx += (dx / d) * f;
         this.vy += (dy / d) * f;
         this.attract = Math.min(1, this.attract + 0.05 * dtScale);
@@ -275,10 +284,11 @@ export class Jellyfish {
       this.attract *= Math.pow(0.9, dtScale);
     }
 
-    // 自然漂浮：温和的垂直回归力，让水母分布在中层水域而非堆在顶部
-    const midY = view.H * 0.52;
+    // 自然漂浮：温和的垂直回归力。阶段十一的目标改成「当前视口的水层中心」，
+    // 这样无论玩家把相机拖到世界哪一处，水母都会自然散布在那一屏的中层水域。
+    const midY = camera.y + camera.vh * 0.52;
     const dy2 = midY - this.y;
-    this.vy += Math.sign(dy2) * Math.min(0.012, Math.abs(dy2) / view.H * 0.03) * dtScale;
+    this.vy += Math.sign(dy2) * Math.min(0.012, (Math.abs(dy2) / camera.vh) * 0.03) * dtScale;
     this.vx += Math.sin(this.sway) * 0.008 * dtScale;
     this.vx *= Math.pow(0.96, dtScale);
     this.vy *= Math.pow(0.97, dtScale);
@@ -296,12 +306,12 @@ export class Jellyfish {
     this.x += this.vx * dtScale;
     this.y += this.vy * dtScale;
 
-    // 边界环绕
+    // 边界环绕：围绕整个世界的三倍边距，走到世界外就绕回来
     const rr = this.r * this.scale;
-    if (this.y < -rr * 4) this.y = view.H + rr;
-    if (this.y > view.H + rr * 4) this.y = -rr;
-    if (this.x < -rr * 3) this.x = view.W + rr;
-    if (this.x > view.W + rr * 3) this.x = -rr;
+    if (this.y < WORLD.y0 - rr * 4) this.y = WORLD.y1 + rr;
+    if (this.y > WORLD.y1 + rr * 4) this.y = WORLD.y0 - rr;
+    if (this.x < WORLD.x0 - rr * 3) this.x = WORLD.x1 + rr;
+    if (this.x > WORLD.x1 + rr * 3) this.x = WORLD.x0 - rr;
 
     this.pulse = pulse;
     return true;

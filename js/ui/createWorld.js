@@ -10,11 +10,12 @@ import { t } from './i18n.js';
 import { PICKABLE_WORLDS, worldById } from '../systems/worlds.js';
 import { COMPANION_VARIANTS } from '../entities/companion.js';
 import { rareCompanionUnlocked, makeRng } from '../core/seed.js';
+import { terrainTypes, createTerrain } from '../systems/terrain.js';
 
 /**
  * @param {object} opts
- *  - onConfirm({ name, mode, worldType, seed, companion, starter }) 创建
- *  - onPreview(worldType, seed)  实时预览回调（主流程可据此换背景）
+ *  - onConfirm({ name, mode, worldType, terrain, seed, companion, starter }) 创建
+ *  - onPreview(worldType, seed, terrain)  实时预览回调（主流程可据此换背景）
  *  - onToast(key)
  */
 export function createWorldPanel({ onConfirm, onPreview, onToast } = {}) {
@@ -28,6 +29,8 @@ export function createWorldPanel({ onConfirm, onPreview, onToast } = {}) {
     mode: document.getElementById('cw-mode'),
     worldLabel: document.getElementById('cw-world-label'),
     worlds: document.getElementById('cw-worlds'),
+    terrainLabel: document.getElementById('cw-terrain-label'),
+    terrains: document.getElementById('cw-terrains'),
     seedLabel: document.getElementById('cw-seed-label'),
     seed: document.getElementById('cw-seed'),
     dice: document.getElementById('cw-dice'),
@@ -45,6 +48,7 @@ export function createWorldPanel({ onConfirm, onPreview, onToast } = {}) {
   const state = {
     mode: 'peace',
     worldType: 'coral',
+    terrain: 'shore',
     companion: 'lucy',
     starter: false,
   };
@@ -90,6 +94,47 @@ export function createWorldPanel({ onConfirm, onPreview, onToast } = {}) {
     }
   }
 
+  /**
+   * 沿海地形卡片（阶段十一）：shore / slope / island。
+   * 缩略图不用 CSS 画，而是把该地形的**真实岸线**采样下来画成小图 ——
+   * 这样玩家在创建面板里看到的形状，和进去之后走到的世界是同一套公式，
+   * 不会出现「面板画了个直角岸，进去全是斜坡」的欺骗感。
+   */
+  function renderTerrains() {
+    if (!el.terrains) return;
+    el.terrains.innerHTML = '';
+    for (const id of terrainTypes()) {
+      const c = document.createElement('div');
+      c.className = 'create-terrain-card' + (id === state.terrain ? ' sel' : '');
+      c.dataset.id = id;
+
+      const cv = document.createElement('canvas');
+      cv.className = 'ctc-canvas';
+      cv.width = 176;
+      cv.height = 68;
+      c.appendChild(cv);
+
+      const nm = document.createElement('div');
+      nm.className = 'ctc-name';
+      nm.textContent = t('terrain.' + id);
+      c.appendChild(nm);
+
+      const ds = document.createElement('div');
+      ds.className = 'ctc-desc';
+      ds.textContent = t('terrain.' + id + '.desc');
+      c.appendChild(ds);
+
+      drawTerrainThumb(cv, id, currentSeedStr());
+
+      c.addEventListener('click', () => {
+        state.terrain = id;
+        renderTerrains();
+        preview();
+      });
+      el.terrains.appendChild(c);
+    }
+  }
+
   function renderComps() {
     if (!el.comps) return;
     el.comps.innerHTML = '';
@@ -122,16 +167,16 @@ export function createWorldPanel({ onConfirm, onPreview, onToast } = {}) {
     if (el.chest) el.chest.classList.toggle('on', state.starter);
   }
 
-  /** 右侧实时缩略图：按群系水色 + 标志结构 + 伴随水母绘制（对应 MC 世界缩略图） */
+  /** 右侧实时缩略图：按群系水色 + 标志结构 + 海岸地形 + 伴随水母绘制（对应 MC 世界缩略图） */
   function preview() {
     const canvas = el.preview;
     if (canvas && canvas.getContext) {
       const w = worldById(state.worldType);
-      renderThumb(canvas, w, state.companion);
+      renderThumb(canvas, w, state.companion, state.terrain, currentSeedStr());
       if (el.previewLabel) el.previewLabel.textContent = t(w.label);
       if (el.previewRef) el.previewRef.textContent = w.mcRef || '';
     }
-    if (onPreview) onPreview(state.worldType, currentSeedStr());
+    if (onPreview) onPreview(state.worldType, currentSeedStr(), state.terrain);
   }
 
   function renderLabels() {
@@ -139,6 +184,7 @@ export function createWorldPanel({ onConfirm, onPreview, onToast } = {}) {
     if (el.nameLabel) el.nameLabel.textContent = t('create.name');
     if (el.modeLabel) el.modeLabel.textContent = t('create.mode');
     if (el.worldLabel) el.worldLabel.textContent = t('create.world');
+    if (el.terrainLabel) el.terrainLabel.textContent = t('create.terrain');
     if (el.seedLabel) el.seedLabel.textContent = t('create.seed');
     if (el.compLabel) el.compLabel.textContent = t('create.companion');
     if (el.chestLabel) el.chestLabel.textContent = t('create.starter');
@@ -153,6 +199,7 @@ export function createWorldPanel({ onConfirm, onPreview, onToast } = {}) {
     // 重置为默认
     state.mode = 'peace';
     state.worldType = 'coral';
+    state.terrain = 'shore';
     state.companion = 'lucy';
     state.starter = false;
     if (el.name) el.name.value = '';
@@ -161,6 +208,7 @@ export function createWorldPanel({ onConfirm, onPreview, onToast } = {}) {
     renderMode();
     renderChest();
     renderWorlds();
+    renderTerrains();
     refreshRare();
     preview();
     el.modal.classList.remove('hide');
@@ -185,6 +233,7 @@ export function createWorldPanel({ onConfirm, onPreview, onToast } = {}) {
         name,
         mode: state.mode,
         worldType: state.worldType,
+        terrain: state.terrain,
         seed: seedStr,
         companion: state.companion,
         starter: state.starter,
@@ -234,11 +283,106 @@ function swatchCss([r, g, b]) {
   return `linear-gradient(180deg, ${top}, ${mid} 55%, rgb(2,10,24))`;
 }
 
+/* ============================================================
+ *  地形缩略图（阶段十一）
+ *  直接调用 createTerrain 采样**真实**地形，把水线 / 水深带画成小图。
+ *  与游戏内用的是同一套公式，所以面板所见即所得。
+ * ============================================================ */
+
+/** 水深带配色（浅 -> 深），与游戏内 scenery 的带色保持同族色相 */
+const THUMB_BAND_COLORS = {
+  land: '#4d5a3c',
+  beach: '#c9b485',
+  shallow: '#4fb8cf',
+  nearshore: '#2f8fb8',
+  midsea: '#1d6690',
+  deepsea: '#123f63',
+};
+
 /**
- * 在 canvas 上绘制"世界缩略图"：群系水色渐变 + 标志结构剪影 + 伴随水母。
+ * 在 canvas 上画一张「该地形长什么样」的小图。
+ * 做法：把 canvas 的每一列映射到世界的一段 X，逐列采样水线高度，
+ * 水线以上填陆地/沙滩色，以下按 6 档水深带依次填色。
+ */
+function drawTerrainThumb(canvas, type, seedStr) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const W = canvas.width;
+  const H = canvas.height;
+
+  let terrain = null;
+  try {
+    terrain = createTerrain({ type, seed: seedStr || 'preview' });
+  } catch (e) {
+    terrain = null;
+  }
+
+  // 采样失败时退化为纯水色，避免面板出现空白/异常
+  if (!terrain || !terrain.shoreLineAt) {
+    ctx.fillStyle = THUMB_BAND_COLORS.midsea;
+    ctx.fillRect(0, 0, W, H);
+    return;
+  }
+
+  const WX0 = -180;
+  const WX1 = 3200 + 180;
+  const WY0 = -180;
+  const WY1 = 1220;
+  const dy = H / (WY1 - WY0);
+  const bandColor = (d) => {
+    const id = bandIdOf(d);
+    return THUMB_BAND_COLORS[id] || THUMB_BAND_COLORS.midsea;
+  };
+
+  const COL = 3;   // 每 3px 一列，足够看清岸线形状又不费时
+  for (let px = 0; px < W; px += COL) {
+    const wx = WX0 + ((px + COL * 0.5) / W) * (WX1 - WX0);
+    const sl = terrain.shoreLineAt(wx);
+    const slY = (sl - WY0) * dy;
+
+    // 水线以上：陆地色（近水线一段染成沙滩色）
+    ctx.fillStyle = THUMB_BAND_COLORS.land;
+    ctx.fillRect(px, 0, COL, Math.max(0, slY));
+    ctx.fillStyle = THUMB_BAND_COLORS.beach;
+    ctx.fillRect(px, Math.max(0, slY - 5), COL, Math.min(5, slY));
+
+    // 水线以下：按水深分档填色（每 4px 一步，避免逐像素调用 depthAt）
+    for (let py = Math.max(0, slY); py < H; py += 4) {
+      const wy = WY0 + (py / H) * (WY1 - WY0);
+      const d = terrain.depthAt ? terrain.depthAt(wx, wy) : 0;
+      const col = d < 0 ? THUMB_BAND_COLORS.land : bandColor(d);
+      ctx.fillStyle = col;
+      ctx.fillRect(px, py, COL, 4.6);
+    }
+    // 水线本身highlight（白浪）
+    ctx.fillStyle = 'rgba(240, 252, 255, 0.75)';
+    ctx.fillRect(px, Math.max(0, slY - 1.4), COL, 1.8);
+  }
+
+  // 海面光泽
+  const gloss = ctx.createLinearGradient(0, 0, 0, H);
+  gloss.addColorStop(0, 'rgba(190, 240, 255, 0.14)');
+  gloss.addColorStop(0.45, 'rgba(0,0,0,0)');
+  gloss.addColorStop(1, 'rgba(0, 10, 26, 0.35)');
+  ctx.fillStyle = gloss;
+  ctx.fillRect(0, 0, W, H);
+}
+
+/** 与 terrain.BANDS 阈值同步的轻量版（避免缩略图模块 import 整套地形常量） */
+function bandIdOf(d) {
+  if (d < 0) return 'land';
+  if (d < 150) return 'beach';
+  if (d < 380) return 'shallow';
+  if (d < 700) return 'nearshore';
+  if (d < 1030) return 'midsea';
+  return 'deepsea';
+}
+
+/**
+ * 在 canvas 上绘制"世界缩略图"：群系水色渐变 + 标志结构剪影 + 海岸地形 + 伴随水母。
  * 对应 MC Bedrock 创建界面的世界缩略图预览。
  */
-function renderThumb(canvas, world, companionId) {
+function renderThumb(canvas, world, companionId, terrainType, seedStr) {
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
   const [r, g, b] = world.baseTint;
@@ -274,6 +418,10 @@ function renderThumb(canvas, world, companionId) {
 
   // 3) 群系标志结构剪影
   drawThumbFeature(ctx, world, W, H);
+
+  // 3.5) 海岸地形带（阶段十一）：在左右两侧叠一条「横切面」示意，
+  //      让玩家在预览里就看出所选岸线是平岸 / 斜岸 / 孤岛。
+  drawThumbCoast(ctx, terrainType, W, H);
 
   // 4) 伴随水母（选中配色）
   const v = COMPANION_VARIANTS.find((x) => x.id === companionId) || COMPANION_VARIANTS[0];
@@ -364,6 +512,58 @@ function drawThumbFeature(ctx, world, W, H) {
     }
     default: break;
   }
+}
+
+/**
+ * 在主预览缩略图里叠一层「岸线示意」：
+ * 不重画整张地形（预览要保留群系水色），只在左上角用一个小剖面图标
+ * 表达三种岸线的形状差异 —— 平岸 / 斜岸 / 孤岛。
+ */
+function drawThumbCoast(ctx, type, W, H) {
+  if (!type) return;
+  const bw = 96, bh = 46;
+  const bx = 8, by = H - bh - 8;
+
+  ctx.save();
+  // 底板
+  ctx.fillStyle = 'rgba(4, 16, 32, 0.55)';
+  ctx.beginPath();
+  ctx.roundRect ? ctx.roundRect(bx - 4, by - 4, bw + 8, bh + 8, 6) : ctx.rect(bx - 4, by - 4, bw + 8, bh + 8);
+  ctx.fill();
+
+  // 海面
+  ctx.fillStyle = 'rgba(40, 120, 170, 0.5)';
+  ctx.fillRect(bx, by, bw, bh);
+
+  const n = 32;
+  ctx.beginPath();
+  ctx.moveTo(bx, by + bh);
+  for (let i = 0; i <= n; i++) {
+    const u = i / n;
+    let h;   // 0 = 顶（陆地），1 = 底（深水）
+    if (type === 'slope') h = Math.min(0.98, u * 0.88 + 0.06);
+    else if (type === 'island') h = Math.abs(u - 0.5) * 1.9;
+    else h = 0.26 + Math.sin(u * 9) * 0.035;      // shore：基本水平，微起伏
+    ctx.lineTo(bx + u * bw, by + Math.max(0, Math.min(1, h)) * bh);
+  }
+  ctx.lineTo(bx + bw, by + bh);
+  ctx.closePath();
+  const lg = ctx.createLinearGradient(0, by, 0, by + bh);
+  lg.addColorStop(0, '#c9b485');
+  lg.addColorStop(0.28, '#43503a');
+  lg.addColorStop(1, 'rgba(10, 40, 70, 0.1)');
+  ctx.fillStyle = lg;
+  ctx.fill();
+
+  // 岸线高光
+  ctx.strokeStyle = 'rgba(240, 252, 255, 0.8)';
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(220, 242, 255, 0.85)';
+  ctx.font = '9px system-ui, sans-serif';
+  ctx.fillText(t('terrain.' + type), bx + 3, by + 10);
+  ctx.restore();
 }
 
 function drawThumbJelly(ctx, v, cx, cy) {

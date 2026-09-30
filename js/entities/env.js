@@ -3,15 +3,26 @@
 // ============================================================
 
 import { rand, TAU } from '../core/config.js';
-import { view } from '../core/state.js';
+import { WORLD } from '../systems/terrain.js';
 
 /* ---------------- 浮游生物 ---------------- */
 export class Plankton {
-  constructor() { this.reset(true); }
+  // 阶段十一：世界坐标。浮游生物不再固定在视口里，而是散布在整张地图的水层中，
+  // 摄像机移动到哪就在哪看到它们（注意 —— 不跟相机「重新撒」，那会显得很假）。
+  constructor(x, y) {
+    if (typeof x === 'number') {
+      this._seedX = x;
+      this._seedY = y;
+    }
+    this.reset(true);
+  }
 
   reset(initial) {
-    this.x = rand(0, view.W);
-    this.y = initial ? rand(0, view.H) : view.H + 10;
+    const vr = { x0: WORLD.x0, x1: WORLD.x1, y0: WORLD.y0, y1: WORLD.y1 };
+    this.x = this._seedX != null ? this._seedX : rand(vr.x0, vr.x1);
+    this.y = this._seedY != null ? this._seedY : (initial ? rand(vr.y0, vr.y1) : vr.y1 + 10);
+    this._seedX = null;
+    this._seedY = null;
     this.r = rand(0.6, 2.2);
     this.vy = -rand(0.1, 0.4);
     this.vx = rand(-0.1, 0.1);
@@ -25,7 +36,8 @@ export class Plankton {
     this.y += this.vy * dtScale;
     this.x += (this.vx + Math.sin(this.life) * 0.2) * dtScale;
     this.life += this.twinkle * dtScale;
-    if (this.y < -10) this.reset(false);
+    // 浮上水面就从世界底部重新升起，形成循环
+    if (this.y < WORLD.y0 - 10) this.reset(false);
     return true;
   }
 
@@ -41,8 +53,8 @@ export class Plankton {
 /* ---------------- 气泡 ---------------- */
 export class Bubble {
   constructor(x, y, fast) {
-    this.x = x ?? rand(0, view.W);
-    this.y = y ?? view.H + 10;
+    this.x = x ?? rand(WORLD.x0, WORLD.x1);
+    this.y = y ?? WORLD.y1 + 10;
     this.r = rand(2, 7);
     this.vy = -(fast ? rand(1.5, 3) : rand(0.3, 0.9));
     this.wob = rand(0, TAU);
@@ -75,8 +87,11 @@ export class Bubble {
 
 /* ---------------- 海草（无 update，靠 t 驱动） ---------------- */
 export class Seaweed {
-  constructor(x) {
+  // 阶段十一：海草锚定在「海底」。y 是它扎根的世界深度，
+  // 高度按该处水深做自适应，避免浅滩里长出一根戳出水面的巨藻。
+  constructor(x, y) {
     this.x = x;
+    this.y = y ?? WORLD.y0 + WORLD.h * 0.55;
     this.h = rand(80, 180);
     this.segs = 10;
     this.phase = rand(0, TAU);
@@ -87,7 +102,7 @@ export class Seaweed {
 
   draw(ctx, t) {
     ctx.save();
-    ctx.translate(this.x, view.H);
+    ctx.translate(this.x, this.y);
     ctx.strokeStyle = `hsla(${this.hue}, 60%, 30%, 0.6)`;
     ctx.lineWidth = this.width;
     ctx.lineCap = 'round';

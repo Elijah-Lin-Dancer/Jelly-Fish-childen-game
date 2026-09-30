@@ -3,7 +3,8 @@
 // ============================================================
 
 import { rand } from '../core/config.js';
-import { pointer, view } from '../core/state.js';
+import { pointer, camera, screenToWorld, screenRadius } from '../core/state.js';
+import { WORLD } from '../systems/terrain.js';
 
 export class Fish {
   constructor(x, y) {
@@ -27,7 +28,9 @@ export class FishSchool {
   /** bait 可选：饵料对象 {x,y}，用于聚集 */
   update(dt, t, bait) {
     const dtScale = dt / 16.667;
-    const W = view.W, H = view.H;
+    // 阶段十一：鱼群在世界坐标里游动，边界 = 世界边界
+    const W = WORLD.x1, H = WORLD.y1;
+    const x0 = WORLD.x0, y0 = WORLD.y0;
     const max = 2.5;
 
     for (const f of this.fish) {
@@ -57,11 +60,13 @@ export class FishSchool {
       ax += (this.cx - f.x) * 0.0003;
       ay += (this.cy - f.y) * 0.0003;
 
-      // 躲避指针
-      if (pointer.active) {
-        const dx = f.x - pointer.x, dy = f.y - pointer.y;
+      // 躲避指针（指针是屏幕坐标，先转到世界；半径按相机缩放折算）
+      if (pointer.active && !camera.dragging) {
+        const pw = screenToWorld(pointer.x, pointer.y);
+        const reach = screenRadius(120);
+        const dx = f.x - pw.x, dy = f.y - pw.y;
         const d2 = dx * dx + dy * dy;
-        if (d2 < 120 * 120) {
+        if (d2 < reach * reach) {
           const d = Math.sqrt(d2) || 1;
           ax += (dx / d) * 0.8;
           ay += (dy / d) * 0.8;
@@ -84,17 +89,18 @@ export class FishSchool {
       if (sp > max) { f.vx = (f.vx / sp) * max; f.vy = (f.vy / sp) * max; }
       f.x += f.vx * dtScale; f.y += f.vy * dtScale;
 
-      if (f.x < 0) f.vx += 0.1;
+      if (f.x < x0) f.vx += 0.1;
       if (f.x > W) f.vx -= 0.1;
-      if (f.y < 0) f.vy += 0.1;
+      if (f.y < y0) f.vy += 0.1;
       if (f.y > H) f.vy -= 0.1;
     }
 
     const now = t || 0;
     this.cx += Math.sin(now * 0.0001 + this.cy) * 0.3;
     this.cy += Math.cos(now * 0.00008) * 0.2;
-    this.cx = W > 0 ? (this.cx + W) % W : this.cx;
-    this.cy = Math.max(H * 0.15, Math.min(H * 0.85, this.cy));
+    // 中心在世界里循环（围绕世界宽度取模，而不是视口）
+    this.cx = WORLD.w > 0 ? x0 + (((this.cx - x0) % WORLD.w) + WORLD.w) % WORLD.w : this.cx;
+    this.cy = Math.max(y0 + WORLD.h * 0.15, Math.min(y0 + WORLD.h * 0.85, this.cy));
   }
 
   draw(ctx) {

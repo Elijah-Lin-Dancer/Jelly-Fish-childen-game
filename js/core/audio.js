@@ -20,6 +20,10 @@ const SFX_FILES = {
   unlock: 'sfx_unlock',
   mode: 'sfx_mode',
   nuzzle: 'sfx_nuzzle',
+  // 阶段 11B：岸上生活元素的互动音效
+  seagull: 'sfx_seagull',   // 海鸥惊飞
+  horn: 'sfx_horn',         // 船鸣
+  splash: 'sfx_splash',     // 入水 / 跳水
 };
 
 export function createAudio(base = 'assets/audio/') {

@@ -6,14 +6,16 @@
 // ============================================================
 
 import { rand, TAU } from '../core/config.js';
-import { view } from '../core/state.js';
+import { camera } from '../core/state.js';
+import { WORLD } from '../systems/terrain.js';
 
 export class Secret {
   constructor(id, kind, x, y, opts = {}) {
     this.id = id;
     this.kind = kind || 'shell';   // shell | shrine
-    this.x = x ?? rand(view.W * 0.1, view.W * 0.9);
-    this.y = y ?? rand(view.H * 0.2, view.H * 0.85);
+    // 阶段十一：世界坐标。未指定时落在相机可见范围内（秘境总是「可遇」的）
+    this.x = x ?? rand(camera.x, camera.x + camera.vw);
+    this.y = y ?? rand(camera.y, camera.y + camera.vh);
     this.r = kind === 'shrine' ? 26 : 12;
     this.found = false;
     this.phase = rand(0, TAU);
@@ -99,10 +101,16 @@ export function seedSecrets(zoneId) {
     out.push(new Secret('ab_c1', 'shell', 0.4, 0.6, { zone: 'abyss' }));
     out.push(new Secret('ab_s1', 'shrine', 0.6, 0.42, { zone: 'abyss' }));
   }
+  // 相对坐标 → 世界坐标。阶段十一：映射到「世界」而不是视口，
+  // 这样秘密是地图上的固定地标，而不是随窗口尺寸漂移。
+  const vx0 = camera.x;
+  const vy0 = camera.y;
+  const vw = camera.vw;
+  const vh = camera.vh;
   for (const s of out) {
-    s.x = view.W * s.x;
-    s.y = view.H * s.y;
-    s.r = Math.min(s.r, Math.min(view.W, view.H) * 0.05);
+    s.x = vx0 + vw * s.x;
+    s.y = vy0 + vh * s.y;
+    s.r = Math.min(s.r, Math.min(vw, vh) * 0.05);
   }
   return out;
 }
