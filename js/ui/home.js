@@ -1,8 +1,9 @@
 // ============================================================
-//  游戏首页：欢迎页 + 池塘命名
-//  - 首次进入显示欢迎页，用户可为池塘命名
-//  - 名称保存到 localStorage，游玩界面点击标题可随时改名
-//  - 名称不走 i18n（用户自定义值原样保留）；仅默认名跟随语言
+//  标题屏（阶段十）· 由原"欢迎页 + 池塘命名"升级为 MC 式标题菜单
+//  - 活海洋全景（画布仍在背后渲染）+ 大标题 + 竖排菜单
+//  - 继续 / 新建世界 / 设置 / 语言（对齐 MC 主菜单）
+//  - 仍负责"池塘命名/改名"：改名走点击左上角标题
+//  参考：https://minecraft.wiki/w/Tutorial:Menu_screen_(Java_Edition)
 // ============================================================
 
 import { t } from './i18n.js';
@@ -27,17 +28,31 @@ function writeCustomName(v) {
   } catch (e) { /* 忽略 */ }
 }
 
-export function createHome({ onStart, onToast, onReset } = {}) {
+/**
+ * @param {object} opts
+ *  - onStart()           首次进入（解锁音频）
+ *  - onToast(key)        轻提示
+ *  - onReset()           重置池塘
+ *  - hasSave()           是否有存档（决定"继续"是否可用）
+ *  - onContinue()        点"继续"
+ *  - onNewWorld()        点"新建世界"（打开创建面板）
+ *  - onOpenSettings()    点"设置"
+ */
+export function createHome({
+  onStart, onToast, onReset,
+  hasSave, onContinue, onNewWorld, onOpenSettings,
+} = {}) {
   const el = {
     home: document.getElementById('home'),
     title: document.getElementById('pond-title'),
     homeTitle: document.getElementById('home-title'),
-    input: document.getElementById('pond-input'),
-    startBtn: document.getElementById('pond-start'),
     welcome: document.getElementById('home-welcome'),
-    prompt: document.getElementById('home-prompt'),
     hint: document.getElementById('home-hint'),
     reset: document.getElementById('pond-reset'),
+    continueBtn: document.getElementById('title-continue'),
+    newBtn: document.getElementById('title-new'),
+    settingsBtn: document.getElementById('title-settings'),
+    langBtn: document.getElementById('title-lang'),
   };
 
   let custom = readCustomName();
@@ -55,26 +70,27 @@ export function createHome({ onStart, onToast, onReset } = {}) {
       el.title.textContent = displayName();
       el.title.classList.toggle('renamed', !!custom);
     }
-    // 文档标题也带上池塘名，便于多标签区分
     const base = t('doc.title');
     document.title = custom ? `${custom} · ${base}` : base;
   }
 
-  /** 初始化首页（显示欢迎页） */
+  /** 显示标题屏 */
   function show() {
     if (!el.home) return;
     syncTitle();
     el.home.classList.remove('hide');
-    if (el.prompt) el.prompt.textContent = t('home.prompt');
+    if (el.homeTitle) el.homeTitle.innerHTML = t('title.logo');
     if (el.welcome) el.welcome.textContent = t('home.welcome');
-    if (el.startBtn) el.startBtn.textContent = t('home.start');
     if (el.hint) el.hint.textContent = t('home.rename');
-    // 首页大标题跟随当前语言下的默认名
-    if (el.homeTitle) el.homeTitle.textContent = t('pond.default');
-    if (el.input) {
-      el.input.value = '';
-      el.input.placeholder = t('home.placeholder');
+    // "继续"仅在有存档时可用（对齐 MC：无世界时灰色/隐藏）
+    const canContinue = hasSave ? !!hasSave() : false;
+    if (el.continueBtn) {
+      el.continueBtn.classList.toggle('disabled', !canContinue);
+      el.continueBtn.textContent = t('title.continue');
     }
+    if (el.newBtn) el.newBtn.textContent = t('title.new');
+    if (el.settingsBtn) el.settingsBtn.textContent = t('title.settings');
+    if (el.langBtn) el.langBtn.textContent = t('title.lang', { lang: app.lang.toUpperCase() });
   }
 
   function hide() {
@@ -82,29 +98,22 @@ export function createHome({ onStart, onToast, onReset } = {}) {
     el.home.classList.add('hide');
   }
 
-  /** 确认名称并进入 */
   function enter() {
-    const v = el.input ? el.input.value.trim() : '';
-    if (v) {
-      custom = v.slice(0, 24);
-      writeCustomName(custom);
-    }
-    syncTitle();
     hide();
     if (!entered) {
       entered = true;
-      if (onStart) onStart(); // 首次进入：解锁音频等
+      if (onStart) onStart();
     }
-    if (enterHook) enterHook();   // 每次进入（用于引导 / 每日稀有客提示）
+    if (enterHook) enterHook();
   }
 
-  /** 注册"进入池塘"回调（可后于构造设置） */
+  /** 注册"进入池塘"回调 */
   function onEnter(fn) { enterHook = fn; }
 
-  /** 游玩界面点击标题改名 */
+  /** 游玩界面点击左上角标题改名 */
   function rename() {
     const next = window.prompt(t('home.prompt'), displayName());
-    if (next === null) return; // 取消
+    if (next === null) return;
     const v = next.trim();
     custom = v ? v.slice(0, 24) : null;
     writeCustomName(custom);
@@ -113,13 +122,25 @@ export function createHome({ onStart, onToast, onReset } = {}) {
   }
 
   function bind() {
-    if (el.startBtn) el.startBtn.addEventListener('click', enter);
-    if (el.input) {
-      el.input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); enter(); }
+    if (el.continueBtn) {
+      el.continueBtn.addEventListener('click', () => {
+        if (hasSave && !hasSave()) {
+          if (onToast) onToast('title.nosave');
+          return;
+        }
+        if (onContinue) onContinue();
+        enter();
       });
-      // 防止输入时误触画布交互
-      el.input.addEventListener('pointerdown', (e) => e.stopPropagation());
+    }
+    if (el.newBtn) {
+      el.newBtn.addEventListener('click', () => { if (onNewWorld) onNewWorld(); });
+    }
+    if (el.settingsBtn) {
+      el.settingsBtn.addEventListener('click', () => { if (onOpenSettings) onOpenSettings(); });
+    }
+    if (el.langBtn) {
+      // 语言按钮由 main 的 toggleLang 接管（保持 HUD 与标题屏同步）
+      el.langBtn.addEventListener('click', () => { if (el._onLang) el._onLang(); });
     }
     if (el.title) {
       el.title.addEventListener('click', rename);
@@ -133,23 +154,38 @@ export function createHome({ onStart, onToast, onReset } = {}) {
           custom = null;
           writeCustomName(null);
           syncTitle();
+          if (el.homeTitle) el.homeTitle.innerHTML = t('title.logo');
           if (onToast) onToast('pond.reset.done');
         }
       });
     }
   }
 
-  /** 语言切换后刷新默认名相关的文本 */
+  /** 语言按钮回调注入（由 main 绑定 toggleLang） */
+  function onLang(fn) { el._onLang = fn; }
+
+  /** 语言切换后刷新标题屏文本 */
   function refreshLang() {
-    if (el.prompt) el.prompt.textContent = t('home.prompt');
+    if (el.homeTitle) el.homeTitle.innerHTML = t('title.logo');
     if (el.welcome) el.welcome.textContent = t('home.welcome');
-    if (el.startBtn) el.startBtn.textContent = t('home.start');
     if (el.hint) el.hint.textContent = t('home.rename');
-    if (el.homeTitle) el.homeTitle.textContent = t('pond.default');
+    if (el.continueBtn) el.continueBtn.textContent = t('title.continue');
+    if (el.newBtn) el.newBtn.textContent = t('title.new');
+    if (el.settingsBtn) el.settingsBtn.textContent = t('title.settings');
+    if (el.langBtn) el.langBtn.textContent = t('title.lang', { lang: app.lang.toUpperCase() });
     if (el.title) el.title.title = t('home.rename');
-    if (el.input) el.input.placeholder = t('home.placeholder');
     syncTitle();
   }
 
-  return { show, hide, bind, refreshLang, syncTitle, onEnter, get name() { return displayName(); } };
+  return {
+    show, hide, bind, refreshLang, syncTitle, onEnter, onLang,
+    get name() { return displayName(); },
+    /** 供外部（创建面板）设置池塘名 */
+    setName(v) {
+      const s = (v || '').trim();
+      custom = s ? s.slice(0, 24) : null;
+      writeCustomName(custom);
+      syncTitle();
+    },
+  };
 }

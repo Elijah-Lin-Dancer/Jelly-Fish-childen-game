@@ -39,8 +39,19 @@ export function createZones(explore, stats) {
   let current = 'shallow';
   // 平滑插值的当前色调
   const cur = { tint: [0, 0, 0], haze: 1, rays: 1, target: null, t: 1 };
+  // 阶段十：世界（群系）基色叠加层，由 main 注入 createWorld 实例
+  let worldProvider = null;
 
   function zoneById(id) { return ZONES.find((z) => z.id === id) || ZONES[0]; }
+
+  /** 注入世界（群系）provider；其 baseTint/haze/rays 会叠加在深度海域之上 */
+  function setWorldProvider(w) { worldProvider = w; }
+
+  function worldTint() {
+    if (!worldProvider) return [0, 0, 0];
+    const t = worldProvider.baseTint;
+    return Array.isArray(t) ? t : [0, 0, 0];
+  }
 
   /** 找到当前最高可解锁的海域（按顺序） */
   function evaluate() {
@@ -88,10 +99,23 @@ export function createZones(explore, stats) {
     zoneById,
     evaluate,
     setZone,
+    setWorldProvider,
     update,
-    /** 供背景 / 景深读取（已包含过渡插值） */
-    get tint() { return cur.tint; },
-    get haze() { return clamp(cur.haze, 0, 1.4); },
-    get rays() { return clamp(cur.rays, 0, 1.2); },
+    /**
+     * 供背景 / 景深读取（深度海域插值 + 群系基色叠加）。
+     * 返回合并后的色调；haze/rays 亦相乘。
+     */
+    get tint() {
+      const w = worldTint();
+      return [cur.tint[0] + w[0], cur.tint[1] + w[1], cur.tint[2] + w[2]];
+    },
+    get haze() {
+      const wm = worldProvider ? (worldProvider.haze || 1) : 1;
+      return clamp(cur.haze * wm, 0, 1.6);
+    },
+    get rays() {
+      const wm = worldProvider ? (worldProvider.rays || 1) : 1;
+      return clamp(cur.rays * wm, 0, 1.4);
+    },
   };
 }

@@ -22,6 +22,7 @@ export function createHud(actions) {
     atlasBtn: document.getElementById('atlas-btn'),
     buildBtn: document.getElementById('build-btn'),
     zoneText: document.getElementById('zone-text'),
+    worldText: document.getElementById('world-text'),
     themeBtn: document.getElementById('theme-btn'),
     soundBtn: document.getElementById('sound-btn'),
     langBtn: document.getElementById('lang-btn'),
@@ -107,6 +108,18 @@ export function createHud(actions) {
     if (el.zoneText) el.zoneText.textContent = t(labelKey);
   }
 
+  /**
+   * 阶段十：当前群系（世界）+ 种子显示。
+   * 罕见蘑菇海追加标记；种子可抄写分享。
+   */
+  function refreshWorld(worldType, seedStr, forced) {
+    if (!el.worldText) return;
+    const name = t('world.' + worldType);
+    const rare = forced ? ' ✦' : '';
+    const seed = seedStr ? ` · ${t('create.seedShort')} ${seedStr}` : '';
+    el.worldText.textContent = `${name}${rare}${seed}`;
+  }
+
   function refreshButtons() {
     if (el.feedBtn) el.feedBtn.classList.toggle('active', !!actions.isFeedMode && actions.isFeedMode());
     if (el.currentBtn) el.currentBtn.classList.toggle('active', !!actions.isCurrentMode && actions.isCurrentMode());
@@ -156,5 +169,5 @@ export function createHud(actions) {
     if (el.fps) el.fps.textContent = t('fps', { n: v });
   }
 
-  return { bind, bindAch, refreshDex, refreshPhase, refreshTheme, refreshAch, refreshActivity, refreshBio, refreshZone, refreshButtons, refreshLang, toast, toastKey, toastText, setFps, el };
+  return { bind, bindAch, refreshDex, refreshPhase, refreshTheme, refreshAch, refreshActivity, refreshBio, refreshZone, refreshWorld, refreshButtons, refreshLang, toast, toastKey, toastText, setFps, el };
 }

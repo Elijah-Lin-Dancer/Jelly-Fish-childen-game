@@ -16,8 +16,12 @@
 <canvas id="ocean-canvas"></canvas>
 
   <div class="hud hud-top-left">
-  <div class="title" id="pond-title">Jellyfish Ocean</div>
+  <div class="title-row">
+    <canvas class="companion-portrait hide" id="companion-portrait" width="48" height="48"></canvas>
+    <div class="title" id="pond-title">Jellyfish Ocean</div>
+  </div>
   <div class="zone" id="zone-text" data-i18n="zone.shallow">Sunlit Shallows</div>
+  <div class="zone world-name" id="world-text"></div>
   <div class="hint" id="hint">
     <span data-i18n="hud.hint.move">Move — attract jellyfish</span><br>
     <span data-i18n="hud.hint.click">Tap — bubbles &amp; ripples</span><br>
@@ -159,16 +163,64 @@
 </div>
 
 <div class="home hide" id="home">
-  <div class="home-card">
-    <div class="home-jelly">🪼</div>
-    <div class="home-welcome" id="home-welcome">Welcome to</div>
-    <h1 class="home-title" id="home-title">Jellyfish Ocean</h1>
-    <div class="home-prompt" id="home-prompt">Name your pond</div>
-    <input class="home-input" id="pond-input" type="text" maxlength="24"
-           autocomplete="off" spellcheck="false" placeholder="My Pond" />
-    <div class="home-start" id="pond-start" role="button" tabindex="0">Start exploring</div>
-    <div class="home-hint" id="home-hint"></div>
+  <div class="title-screen">
+    <div class="title-logo" id="home-title">JELLYFISH<br>OCEAN</div>
+    <div class="title-sub" id="home-welcome">Welcome to</div>
+    <div class="title-menu">
+      <div class="title-btn" id="title-continue" role="button" tabindex="0">Continue</div>
+      <div class="title-btn" id="title-new" role="button" tabindex="0">Create New World</div>
+      <div class="title-btn" id="title-settings" role="button" tabindex="0">Settings</div>
+      <div class="title-btn" id="title-lang" role="button" tabindex="0">Language: EN</div>
+    </div>
+    <div class="title-foot" id="home-hint"></div>
     <div class="home-reset" id="pond-reset" role="button" tabindex="0" data-i18n="pond.reset">Reset pond</div>
+  </div>
+</div>
+
+<div class="dex-modal hide" id="create-modal">
+  <div class="dex-panel create-panel">
+    <div class="dex-head">
+      <div class="dex-head-title" id="create-title">Create New World</div>
+      <div class="dex-close" id="create-close" role="button" tabindex="0" aria-label="Close">✕</div>
+    </div>
+    <div class="create-body">
+      <div class="create-main">
+        <div class="create-row">
+          <div class="create-label" id="cw-name-label">World name</div>
+          <input class="create-input" id="cw-name" type="text" maxlength="24"
+                 autocomplete="off" spellcheck="false" placeholder="My Pond" />
+        </div>
+        <div class="create-row">
+          <div class="create-label" id="cw-mode-label">Game mode</div>
+          <div class="create-cycle" id="cw-mode" role="button" tabindex="0">Peaceful</div>
+        </div>
+        <div class="create-row">
+          <div class="create-label" id="cw-world-label">Biome</div>
+          <div class="create-worlds" id="cw-worlds"></div>
+        </div>
+        <div class="create-row">
+          <div class="create-label" id="cw-seed-label">Seed</div>
+          <div class="create-seed-wrap">
+            <input class="create-input" id="cw-seed" type="text" maxlength="40"
+                   autocomplete="off" spellcheck="false" placeholder="(random)" />
+            <div class="create-dice" id="cw-dice" role="button" tabindex="0" data-i18n-title="create.random">🎲</div>
+          </div>
+        </div>
+        <div class="create-row">
+          <div class="create-label" id="cw-comp-label">Your jelly</div>
+          <div class="create-comps" id="cw-comps"></div>
+        </div>
+        <div class="create-row">
+          <div class="create-label" id="cw-chest-label">Starter kit</div>
+          <div class="switch" id="cw-chest" role="switch" tabindex="0" aria-label="Starter kit"><span class="knob"></span></div>
+        </div>
+      </div>
+      <div class="create-preview" id="cw-preview"></div>
+    </div>
+    <div class="create-foot">
+      <div class="create-hint" id="cw-hint"></div>
+      <div class="create-go" id="cw-create" role="button" tabindex="0">Create</div>
+    </div>
   </div>
 </div>
 

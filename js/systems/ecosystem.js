@@ -7,11 +7,12 @@
 
 import { BigFish } from '../entities/bigfish.js';
 
-export function createEcosystem({ plankton, schools, jellyfish, current, onEvent, getMode, onSnatch, isSheltered } = {}) {
+export function createEcosystem({ plankton, schools, jellyfish, current, onEvent, getMode, onSnatch, isSheltered, predatorSafe } = {}) {
   const bigFish = new BigFish(getMode ? (getMode() === 'adventure' ? 'adventure' : 'peace') : 'peace');
   let announced = false;
   let prevNear = false;
   let announcedHunt = false;
+  let safe = false;
 
   function nearestPlankton(x, y) {
     let best = null, bestD = Infinity;
@@ -58,8 +59,12 @@ export function createEcosystem({ plankton, schools, jellyfish, current, onEvent
     }
 
     // 3) 大鱼 AI（读取 current → 可被玩家洋流推开）；模式决定温和 / 掠食
+    //    阶段十：蘑菇海（predatorSafe）无掠食者 —— 大鱼不出现、不捕猎
+    safe = predatorSafe ? !!predatorSafe() : false;
     if (getMode) bigFish.setMode(getMode() === 'adventure' ? 'adventure' : 'peace');
-    bigFish.update(dt, t, jellyfish, current, { onSnatch, isSheltered });
+    if (!safe) {
+      bigFish.update(dt, t, jellyfish, current, { onSnatch, isSheltered });
+    }
 
     // 4) 首次靠近水母群 → 提示一次（分模式文案）
     if (bigFish.nearJellies && !prevNear && !announced) {
@@ -78,7 +83,7 @@ export function createEcosystem({ plankton, schools, jellyfish, current, onEvent
   }
 
   function draw(ctx) {
-    bigFish.draw(ctx);
+    if (!safe) bigFish.draw(ctx);
   }
 
   return {

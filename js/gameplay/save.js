@@ -38,11 +38,16 @@ export function createSave(getJellyfish, getMeta) {
     // 隐藏纪念水母不入存档：它的存在由 ocean.memory 决定，避免被重复计算
     const jelly = arr.filter((j) => !j.isMemory).slice(0, cap).map(serialize);
     // 阶段八：池塘存档升级为带元数据的对象（mode / buildings）
+    // 阶段十：升 v3，加入世界（worldType / seed）与伴随水母（companion）
     // 元数据由 main 注入，保持 save 不反向依赖具体系统
     const meta = getMeta ? (getMeta() || {}) : {};
     return {
-      v: 2,
+      v: 3,
       mode: meta.mode || 'peace',
+      worldType: meta.worldType || 'coral',
+      seed: meta.seed != null ? String(meta.seed) : '',
+      companion: meta.companion || 'lucy',
+      starter: meta.starter ? 1 : 0,
       buildings: meta.buildings || [],
       jelly,
     };
@@ -57,8 +62,8 @@ export function createSave(getJellyfish, getMeta) {
   }
 
   /**
-   * 读取原始存档（统一为 { v, mode, buildings, jelly }）。
-   * 向后兼容阶段七及以前的纯数组格式 → 视为 peace + 无建筑。
+   * 读取原始存档（统一为 { v, mode, worldType, seed, companion, starter, buildings, jelly }）。
+   * 向后兼容阶段七及以前的纯数组格式 / 阶段八 v2 → 补默认世界与伴随。
    * 无有效数据返回 null。
    */
   function readRaw() {
@@ -67,12 +72,18 @@ export function createSave(getJellyfish, getMeta) {
       if (!raw) return null;
       const data = JSON.parse(raw);
       if (Array.isArray(data)) {
-        return data.length ? { v: 1, mode: 'peace', buildings: [], jelly: data } : null;
+        return data.length
+          ? { v: 1, mode: 'peace', worldType: 'coral', seed: '', companion: 'lucy', starter: 0, buildings: [], jelly: data }
+          : null;
       }
       if (!data || !Array.isArray(data.jelly)) return null;
       return {
         v: data.v || 2,
         mode: data.mode === 'adventure' ? 'adventure' : 'peace',
+        worldType: typeof data.worldType === 'string' ? data.worldType : 'coral',
+        seed: data.seed != null ? String(data.seed) : '',
+        companion: typeof data.companion === 'string' ? data.companion : 'lucy',
+        starter: data.starter ? 1 : 0,
         buildings: Array.isArray(data.buildings) ? data.buildings : [],
         jelly: data.jelly,
       };
@@ -81,11 +92,18 @@ export function createSave(getJellyfish, getMeta) {
     }
   }
 
-  /** 读取存档元数据（mode / buildings），无存档返回 null */
+  /** 读取存档元数据（mode / world / companion），无存档返回 null */
   function readMeta() {
     const d = readRaw();
     if (!d) return null;
-    return { mode: d.mode, buildings: d.buildings };
+    return {
+      mode: d.mode,
+      worldType: d.worldType,
+      seed: d.seed,
+      companion: d.companion,
+      starter: d.starter,
+      buildings: d.buildings,
+    };
   }
 
   /** 把存档数据映射为水母构造参数（坐标按当前视口 clamp） */

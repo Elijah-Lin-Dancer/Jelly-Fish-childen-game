@@ -2,7 +2,7 @@
 //  入口：装配所有模块并启动主循环
 // ============================================================
 
-import { DPR, rand, isMobile } from './core/config.js';
+import { DPR, rand, isMobile, TAU } from './core/config.js';
 import { view, pointer, theme, dayNight, app, perf, setTier, quality } from './core/state.js';
 import { createScheduler } from './core/loop.js';
 import { createResize } from './core/resize.js';
@@ -24,6 +24,9 @@ import { createCurrent } from './systems/current.js';
 import { createEcosystem } from './systems/ecosystem.js';
 import { createMode } from './systems/mode.js';
 import { createBuild } from './systems/build.js';
+import { createWorld, worldById } from './systems/worlds.js';
+import { rareCompanionUnlocked } from './core/seed.js';
+import { Companion, COMPANION_VARIANTS } from './entities/companion.js';
 import { createCollection } from './gameplay/collection.js';
 import { createSave } from './gameplay/save.js';
 import { createAchievements } from './gameplay/achievements.js';
@@ -40,7 +43,7 @@ import { Secret, seedSecrets } from './entities/secret.js';
 import { createMemory } from './gameplay/memory.js';
 import { createMemoryPad } from './ui/memoryPad.js';
 import { createBuildPad } from './ui/buildPad.js';
-import { createModeSelect } from './ui/modeSelect.js';
+import { createWorldPanel } from './ui/createWorld.js';
 import { Bogyo } from './entities/bogyo.js';
 import { dailyRareIndex } from './gameplay/daily.js';
 import { Jellyfish, JELLY_PALETTES } from './entities/jellyfish.js';
@@ -101,8 +104,13 @@ const collection = createCollection(
 
 // 池塘存档：把当前水母落盘，重开即"你的池塘"
 // 阶段八：存档元数据（mode / buildings）由 getMeta 注入
+// 阶段十：加入 worldType / seed / companion
 const save = createSave(() => jellyfish, () => ({
   mode: mode.serialize(),
+  worldType: world.id,
+  seed: world.seedStr,
+  companion: companionVariantId,
+  starter: starterKit ? 1 : 0,
   buildings: build.serialize(),
 }));
 
@@ -145,6 +153,170 @@ const build = createBuild({
   onError: (k) => hud.toast(k),
 });
 
+// ---------- 阶段十：世界（群系）+ 伴随水母 ----------
+const worldRef = { current: createWorld({ type: 'coral', seed: '' }) };
+const world = {
+  get id() { return worldRef.current.id; },
+  get seedStr() { return worldRef.current.seedStr; },
+  get baseTint() { return worldRef.current.baseTint; },
+  get haze() { return worldRef.current.haze; },
+  get rays() { return worldRef.current.rays; },
+  get feature() { return worldRef.current.feature; },
+  get predatorSafe() { return worldRef.current.predatorSafe; },
+  get mechanics() { return worldRef.current.mechanics; },
+  get decor() { return worldRef.current.decor; },
+  speciesWeight(i) { return worldRef.current.speciesWeight(i); },
+  get forcedMushroom() { return worldRef.current.forcedMushroom; },
+};
+let companionVariantId = 'lucy';
+let companion = null;
+let starterKit = false;
+
+/** 生成/替换伴随水母（玩家身份标识，跟随光标） */
+function spawnCompanion(variant) {
+  companionVariantId = variant || companionVariantId;
+  companion = new Companion(view.W * 0.5 + 120, view.H * 0.5, { variant: companionVariantId });
+  updateCompanionPortrait();
+}
+
+/** 把伴随水母配色画到 HUD 小头像 */
+function updateCompanionPortrait() {
+  const c = document.getElementById('companion-portrait');
+  if (!c || !companion) return;
+  c.classList.remove('hide');
+  const ctx2 = c.getContext('2d');
+  const W = c.width, H = c.height;
+  ctx2.clearRect(0, 0, W, H);
+  const v = companion.variant;
+  // 底晕
+  const g = ctx2.createRadialGradient(W / 2, H / 2, 2, W / 2, H / 2, W / 2);
+  g.addColorStop(0, hexA(v.glow, 0.5));
+  g.addColorStop(1, hexA(v.glow, 0));
+  ctx2.fillStyle = g;
+  ctx2.fillRect(0, 0, W, H);
+  // 伞盖
+  const r = W * 0.32;
+  const body = ctx2.createRadialGradient(W / 2 - r * 0.3, H / 2 - r * 0.3, r * 0.1, W / 2, H / 2, r);
+  body.addColorStop(0, v.accent);
+  body.addColorStop(0.55, v.core);
+  body.addColorStop(1, v.glow);
+  ctx2.fillStyle = body;
+  ctx2.beginPath();
+  ctx2.ellipse(W / 2, H / 2 + 2, r, r * 0.82, 0, Math.PI, 0);
+  ctx2.closePath();
+  ctx2.fill();
+  // 触须
+  ctx2.strokeStyle = hexA(v.tent, 0.8);
+  ctx2.lineWidth = 1.4;
+  for (let i = -1; i <= 1; i++) {
+    ctx2.beginPath();
+    ctx2.moveTo(W / 2 + i * r * 0.5, H / 2 + 2);
+    ctx2.lineTo(W / 2 + i * r * 0.7, H / 2 + r * 1.4);
+    ctx2.stroke();
+  }
+}
+
+function hexA(hex, a) {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+/**
+ * 绘制当前群系的标志结构（由 world.decor 派生位置，同种子同布局）。
+ * coral 珊瑚丛 / ice 浮冰 / vent 火山微光 / neon 荧光粒子 / mycelium 菌丝微光
+ */
+function drawWorldDecor(c, t) {
+  const feat = world.feature;
+  const decor = world.decor || [];
+  if (!decor.length) return;
+  c.save();
+  for (const d of decor) {
+    const x = d.x * view.W;
+    const y = d.y * view.H;
+    const s = d.s;
+    const ph = d.ph;
+    switch (feat) {
+      case 'coral': {
+        // 多色扇珊瑚
+        const cols = ['#ff8fb0', '#ffb26b', '#8affc0', '#8fd0ff'];
+        for (let i = 0; i < 4; i++) {
+          const col = cols[i % cols.length];
+          const bx = x + (i - 1.5) * 14 * s;
+          c.strokeStyle = hexA(col, 0.5);
+          c.lineWidth = 3 * s;
+          c.lineCap = 'round';
+          c.beginPath();
+          c.moveTo(bx, y + 30 * s);
+          c.quadraticCurveTo(bx + Math.sin(t * 0.0008 + ph + i) * 6, y + 6 * s, bx, y - 10 * s);
+          c.stroke();
+        }
+        break;
+      }
+      case 'ice': {
+        // 浮冰（蓝冰反光）
+        const a = 0.18 + Math.sin(t * 0.0004 + ph) * 0.05;
+        c.fillStyle = `rgba(180, 220, 255, ${a})`;
+        c.beginPath();
+        c.ellipse(x, y, 34 * s, 18 * s, ph, 0, TAU);
+        c.fill();
+        c.strokeStyle = 'rgba(220, 240, 255, 0.25)';
+        c.lineWidth = 1.2;
+        c.stroke();
+        break;
+      }
+      case 'vent': {
+        // 火山口 + 暗红脉动光
+        const pulse = 0.4 + Math.sin(t * 0.002 + ph) * 0.25;
+        const g = c.createRadialGradient(x, y, 2, x, y, 60 * s);
+        g.addColorStop(0, `rgba(255, 90, 60, ${pulse * 0.5})`);
+        g.addColorStop(1, 'rgba(255, 60, 40, 0)');
+        c.fillStyle = g;
+        c.beginPath();
+        c.arc(x, y, 60 * s, 0, TAU);
+        c.fill();
+        c.fillStyle = `rgba(90, 30, 25, ${0.5})`;
+        c.beginPath();
+        c.moveTo(x - 18 * s, y + 14 * s);
+        c.lineTo(x, y - 16 * s);
+        c.lineTo(x + 18 * s, y + 14 * s);
+        c.closePath();
+        c.fill();
+        break;
+      }
+      case 'neon': {
+        // 悬浮荧光粒子
+        for (let i = 0; i < 6; i++) {
+          const px = x + Math.sin(t * 0.0006 + ph + i * 1.7) * 30 * s;
+          const py = y + Math.cos(t * 0.0007 + ph + i * 2.1) * 30 * s;
+          const a = 0.3 + Math.sin(t * 0.003 + i + ph) * 0.25;
+          c.fillStyle = hexA(['#8affd0', '#8fd0ff', '#d08fff'][i % 3], a);
+          c.beginPath();
+          c.arc(px, py, 3 * s, 0, TAU);
+          c.fill();
+        }
+        break;
+      }
+      case 'mycelium': {
+        // 菌丝微光（粉彩圆点 + 柔光）
+        const a = 0.2 + Math.sin(t * 0.0015 + ph) * 0.1;
+        const g = c.createRadialGradient(x, y, 2, x, y, 44 * s);
+        g.addColorStop(0, `rgba(230, 200, 255, ${a})`);
+        g.addColorStop(1, 'rgba(200, 170, 240, 0)');
+        c.fillStyle = g;
+        c.beginPath();
+        c.arc(x, y, 44 * s, 0, TAU);
+        c.fill();
+        break;
+      }
+      default: break;
+    }
+  }
+  c.restore();
+}
+
 function spawnEggJelly() {
   const j = new Jellyfish(view.W / 2, view.H / 2, 0, {});
   j.r = 64; j.baseR = 64; j.scale = 1;
@@ -164,13 +336,23 @@ const feeding = createFeeding(baits, (x, y) => {
   achievements.check(stats, { type: 'feed' });
 });
 
-// ---------- 首页（欢迎 + 池塘命名） ----------
+// ---------- 标题屏（MC 式菜单） ----------
 const home = createHome({
   onStart: () => {
     // 首次进入：借用户手势解锁音频（浏览器自动播放策略）
     audio.unlock();
   },
   onToast: (key) => hud.toast(key),
+  hasSave: () => save.hasSave(),
+  onContinue: () => {
+    // 继续：直接恢复上次池塘（存档已在启动时恢复）
+    audio.unlock();
+    hud.refreshZone && hud.refreshZone(zones.label);
+    coach.start();
+    maybeAnnounceRare();
+  },
+  onNewWorld: () => { createPanel.show(); },
+  onOpenSettings: () => { settings.toggle(); },
   onReset: () => {
     if (!window.confirm(t('pond.reset.confirm'))) return false;
     save.reset();
@@ -184,6 +366,12 @@ const home = createHome({
     // 阶段八：重置模式与建造
     build.reset();
     mode.restore('peace');
+    // 阶段十：重置世界与伴随水母
+    companion = null;
+    companionVariantId = 'lucy';
+    starterKit = false;
+    const portrait = document.getElementById('companion-portrait');
+    if (portrait) portrait.classList.add('hide');
     // 隐藏纪念内容一并清除（避免从重置状态反推）
     if (memory) memory.reset();
     bogyo = null;
@@ -287,6 +475,8 @@ const ecosystem = createEcosystem({
   plankton, schools, jellyfish, current,
   onEvent: (k) => hud.toast(k),
   getMode: () => mode.current,
+  // 阶段十：蘑菇海（mycelium）无掠食者 —— 对应 MC 蘑菇岛无敌对生物
+  predatorSafe: () => world.predatorSafe,
   // 冒险模式中档失败：叼走一只（优先保护特殊个体）
   onSnatch: (j) => {
     if (!mode.isAdventure() || !j || j.isMemory) return false;
@@ -370,18 +560,50 @@ const buildPad = createBuildPad({
 // 建造"放置"流程：面板里选好模块后，进入放置模式，下一次点击海域即落位
 const buildPlace = { active: false, id: null, remove: false };
 
-// 新存档选模式：无存档时才弹
-const modeSelect = createModeSelect({
-  onPick: (m) => {
-    mode.set(m);
+// ---------- 阶段十：新建世界面板（MC 式） ----------
+/** 应用一份世界配置：世界名 / 模式 / 群系 / 种子 / 伴随水母 / 起始礼包 */
+function applyWorldConfig(cfg, { announce = true } = {}) {
+  mode.set(cfg.mode);
+  const w = createWorld({ type: cfg.worldType, seed: cfg.seed });
+  worldRef.current = w;              // 用同一实例更新内部群系与种子
+  zones.setWorldProvider(w);
+  if (cfg.name) home.setName(cfg.name);
+  spawnCompanion(cfg.companion);
+  starterKit = !!cfg.starter;
+  if (hud.refreshZone) hud.refreshZone(zones.label);
+  hud.refreshWorld && hud.refreshWorld(w.id, w.seedStr, w.forcedMushroom);
+  if (starterKit) {
+    economy.gain(40);
+    if (hud.refreshBio) hud.refreshBio(economy.bio);
+  }
+  save.markDirty();
+  save.write();
+  if (announce) {
+    hud.toastKey('create.ready', { world: t(worldById(w.id).label) });
+  }
+}
+
+const createPanel = createWorldPanel({
+  onConfirm: (cfg) => {
     audio.sfx('mode');
-    // 选定模式后正式建立新池塘
-    save.markDirty();
-    save.write();
-    hud.refreshZone && hud.refreshZone(zones.label);
-    // 选完模式再启动首次引导
+    // 全新世界：清空并重新播种
+    clearWorld();
+    applyWorldConfig(cfg, { announce: false });
+    seedWorld(null);
+    if (memory.unlocked) spawnBogyo(false);
+    if (cfg.starter) {
+      // 起始礼包：送一小片珊瑚丛
+      setTimeout(() => { economy.gain(20); if (hud.refreshBio) hud.refreshBio(economy.bio); }, 0);
+    }
     coach.start();
+    maybeAnnounceRare();
+    hud.toastKey('create.started', { world: t(worldById(worldRef.current.id).label) });
   },
+  onPreview: (worldType, seed) => {
+    // 实时预览：按群系更新背景叠加色（不落盘、不重建世界）
+    zones.setWorldProvider(createWorld({ type: worldType, seed }));
+  },
+  onToast: (k) => hud.toast(k),
 });
 
 buildPad.onSelectModule((id) => {
@@ -529,10 +751,17 @@ function softRebuild() {
 /** 恢复上次的池塘；若无可恢复数据则生成全新世界 */
 function restorePond() {
   // 阶段八：先恢复存档元数据（模式 / 建筑）
+  // 阶段十：一并恢复世界（群系 / 种子）与伴随水母
   const meta = save.readMeta && save.readMeta();
   if (meta) {
     mode.restore(meta.mode);
     build.restore(meta.buildings);
+    const w = createWorld({ type: meta.worldType || 'coral', seed: meta.seed || '' });
+    worldRef.current = w;
+    zones.setWorldProvider(w);
+    starterKit = !!meta.starter;
+    spawnCompanion(meta.companion || 'lucy');
+    hud.refreshWorld && hud.refreshWorld(w.id, w.seedStr, w.forcedMushroom);
   }
   const params = save.restoreParams();
   if (!params || !params.length) {
@@ -784,6 +1013,11 @@ const scheduler = createScheduler();
 
 scheduler.add(createDayNight());
 scheduler.add(createBackground());
+// 阶段十：群系标志结构（珊瑚/浮冰/热泉/荧光/菌丝），画在背景之上、光束之下
+scheduler.add({
+  id: 'worldDecor', order: 1,
+  draw: (c, t) => drawWorldDecor(c, t),
+});
 scheduler.add({
   id: 'build', order: 6,
   draw: (c, t) => build.draw(c, t),
@@ -825,18 +1059,21 @@ scheduler.add(createDepthHaze());
 scheduler.add({
   id: 'jellyfish', order: 7,
   update: () => {
-    const dtScale = dtGlobal / 16.667;
+    // 阶段十：群系节奏（极地冰海更慢）
+    const mech = world.mechanics;
+    const dtScale = (dtGlobal / 16.667) * (mech.dtScale || 1);
     const adventure = mode.isAdventure();
     // 当前海域的氧况：越深缺氧越快（约：深渊 12s、微光 22s 耗尽；浅海约 9s 回满）
     const zid = zones.current;
-    const oxRate = zid === 'abyss' ? -0.0014 : zid === 'midnight' ? -0.00075 : 0.0018; // <0 缺氧 / >0 复氧
+    let oxRate = zid === 'abyss' ? -0.0014 : zid === 'midnight' ? -0.00075 : 0.0018; // <0 缺氧 / >0 复氧
+    oxRate += (mech.oxBonus || 0);   // 群系修正（vent 更快见底 / mycelium 稍缓）
 
     for (const j of jellyfish) {
       j.update(dtGlobal, tGlobal);
       // 阶段五：洋流对水母施加力（浮力 / 惯性手感）
       const cur = current.sample(j.x, j.y, tGlobal);
-      // 阶段八：海草带削弱局部洋流
-      const calm = 1 - build.effectOf('calm', j.x, j.y);
+      // 阶段八：海草带削弱局部洋流；阶段十：群系平静度
+      const calm = Math.max(0, 1 - build.effectOf('calm', j.x, j.y) - (mech.calm || 0));
       j.vx += cur.vx * calm * 0.8 * dtScale;
       j.vy += cur.vy * calm * 0.8 * dtScale;
       // 靠近饵料时轻微聚集
@@ -915,6 +1152,19 @@ scheduler.add({
   id: 'bogyo', order: 14,
   update: () => { if (bogyo) bogyo.update(dtGlobal, tGlobal); },
   draw: (c) => { if (bogyo) bogyo.draw(c); },
+});
+
+// ---------- 阶段十：伴随水母（跟随光标） ----------
+scheduler.add({
+  id: 'companion', order: 15,
+  update: () => {
+    if (!companion) return;
+    // 跟随光标 / 触摸点；无交互时缓慢漂向画布中心
+    const tx = pointer.active ? pointer.x : view.W * 0.5;
+    const ty = pointer.active ? pointer.y : view.H * 0.42;
+    companion.update(dtGlobal, { x: tx, y: ty });
+  },
+  draw: (c) => { if (companion) companion.draw(c); },
 });
 
 // ---------- 阶段七：秘密 / 海域 / 目标 / 叙事 ----------
@@ -1037,15 +1287,13 @@ function start() {
   atlas.bind();
   memoryPad.bind();
   buildPad.bind();
+  createPanel.bind();
   if (hud.refreshZone) hud.refreshZone(zones.label);
   setupZoneContent(zones.current);
   if (hud.refreshActivity) hud.refreshActivity(false);
 
   // 恢复存档后立即评估一次（例如 déjà 满足的成就）
   achievements.check(stats, { type: 'init' });
-
-  // 阶段八：先判断是否"全新池塘"——必须在 restorePond 播种（会 markDirty）之前
-  const isFreshPond = !save.hasSave();
 
   // 优先恢复上次的池塘；无存档则生成新世界
   restorePond();
@@ -1055,20 +1303,25 @@ function start() {
   // （必须在 restorePond 之后：clearWorld 会清空数组）
   if (memory.unlocked) spawnBogyo(false);
 
+  // 阶段十：若无存档，先给一个默认伴随水母（进入新建世界后可换）
+  if (!companion) spawnCompanion(companionVariantId);
+
   save.start();
 
-  // 首页：欢迎页 + 池塘命名
+  // 标题屏：MC 式菜单（继续 / 新建世界 / 设置 / 语言）
   home.bind();
+  home.onLang(() => {
+    toggleLang();
+    hud.refreshLang();
+    hud.refreshButtons();
+    home.refreshLang();
+    if (settings.isOpen) settings.render();
+  });
   home.show();
 
-  // 首次进入引导（只显示一次），在进入池塘后弹出
+  // 首次进入（点"继续"）后的引导 / 提示
   home.onEnter(() => {
-    // 阶段八：全新池塘 → 先让玩家选模式（MC 式），选完再启动引导
-    if (isFreshPond) {
-      modeSelect.show();
-    } else {
-      coach.start();
-    }
+    coach.start();
     maybeAnnounceRare();
   });
 
