@@ -27,6 +27,28 @@ import { view, camera, camInput, CAM_SPEED, CAM_EASE, CAM_DAMP } from '../core/s
 // 1.15 → 两个方向都留出约 13% 的可移动余量，观感上世界比屏幕大一圈。
 const GROW = 1.15;
 
+// 单轴「最多占世界多少」的上限 —— 这是 11A/11B 两轮踩坑后的最终形态。
+//
+// 【为什么还需要它】
+//   光有 GROW 不够。scale = max(W/w, H/h) * GROW 的语义是「较紧的那条边放大到铺满」，
+//   于是**较松的那条边必然只剩 1/GROW ≈ 87% 的余量**。这在横屏下无所谓
+//   （宽是紧边，高度只占 87% 左右，还能上下走）。
+//   但手机竖屏时**高变成了紧边**：vh = H/scale ≈ WORLD.h / GROW = 世界高的 87%。
+//   后果不是「走不动」这么轻 —— 是**水线整个掉出相机可达范围**：
+//     实测竖屏 390×844 时 vh = 2609，而世界高 3000，
+//     相机 y 被夹在 [-1100, -709]，可水线在 y≈0 附近，
+//     于是玩家一进游戏看到的是「一片没有岸的空海」，怎么拖都拖不到沙滩。
+//   这个坑最初表现得像「世界没配好」——我按这个方向试过把 y0 从 -180 拉到 -1100、
+//   把 h 从 1400 扩到 3000，全都无效：**世界变大，vh 同比变大，比例不变**。
+//   真正的解法是给 scale 加一个下界，让那条「紧边」也不要紧到离谱。
+//
+// 【取值依据】
+//   FILL_MAX = 0.72 表示「任何一条轴上，可见范围最多占世界的 72%」，
+//   即至少留 28% 的移动余量。竖屏的 vh 因此从 2609 降到 3000*0.72 = 2160，
+//   相机 y 可达区间扩到 [-1100, -260]，水线重新进入可达范围。
+//   代价是竖屏下画面比原来「更远」，但这是唯一能保证「看得见岸」的代价。
+const FILL_MAX = 0.72;
+
 export function createCamera() {
   // 注意：vw/vh 必须「从第一帧起就是数字」。它们存在 camera 对象上而不是闭包变量，
   // 否则相机 resize 之前任何读取都会拿到 undefined，NaN 会顺着渲染管线一路扩散
@@ -38,7 +60,13 @@ export function createCamera() {
   function resize() {
     if (!view.W || !view.H) return;
     const fit = Math.max(view.W / WORLD.w, view.H / WORLD.h);
-    camera.scale = fit > 0 ? fit * GROW : 1;
+    let scale = fit > 0 ? fit * GROW : 1;
+    // 下界：保证可见范围不超过世界的 FILL_MAX。
+    // 取两轴所需的最小 scale，谁超限就按谁收 —— 用 max 而不是分别处理，
+    // 是因为 scale 是全局唯一的，必须同时满足两个方向的约束。
+    const minScale = Math.max(view.W / (WORLD.w * FILL_MAX), view.H / (WORLD.h * FILL_MAX));
+    if (scale < minScale) scale = minScale;
+    camera.scale = scale;
     camera.vw = view.W / camera.scale;
     camera.vh = view.H / camera.scale;
     clampToBounds(true);

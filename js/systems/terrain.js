@@ -12,10 +12,10 @@ import { makeRng, rangeFrom } from '../core/seed.js';
 export const WORLD = {
   x0: 0,
   x1: 3200,
-  y0: -180,
-  y1: 1220,
+  y0: -1100,
+  y1: 2900,
   w: 3200,
-  h: 1400,
+  h: 4000,
 };
 
 // 【尺寸是怎么定下来的 —— 改动前务必读这一段】
@@ -39,16 +39,35 @@ export const WORLD = {
 //      水母尺寸够大、点击互动命中容易；横移 1.6 屏配合横向为主的定位够用。
 //      9000 那种俯瞰长卷虽然横移 5 屏，但水母缩成一个小点，互动体验会崩。
 //
-//   ⑤ 纵向 1400（h/w = 0.4375）：桌面 16:9 得 183 纵移，够表达
-//      「浅滩 → 斜坡 → 深海」的层次；手机竖屏会额外获得约 150 纵移。
+//   ⑤ 纵向：**两侧都必须留够「一整屏」的余量**，这是两次踩坑换来的。
+//      水深侧（y1=1900）：11B 做发现机制时发现 deepsea（阈值 1030）走不到 ——
+//        原先 y1=1220，相机中心极限深度只到 ~850（midsea），六档带只能用五档。
+//      陆地侧（y0=-1100）：同一轮发现的另一半问题。原先 y0=-180，而手机竖屏
+//        的 vh 会放大到约 2600（竖屏由高度决定缩放），此时相机 y 允许范围只有
+//        [-180, y1-vh] —— 相机压根**上不去**，水线以上的整片沙滩被挤到视野之外，
+//        首屏是一片空海（实测可见区 95% 是 midsea/deepsea，岸上元素全在视野上方）。
+//      教训：世界尺寸不能按「桌面看着差不多」来定。竖屏的 vh 可以到世界高的 87%，
+//        必须按最极端的视口预留，否则会出现「桌面正常、手机进游戏看不到岸」。
+//      代价：h 变大 → 竖屏 vh 也变大 → 缩放更小。但正确性优先于观感。
 export const ASPECT = WORLD.w / WORLD.h;
 
 // 水深带（按 depth 阈值划分），顺序由浅到深。
 //
-// 阈值按「每个带约占可见高度的 1/6」标定：桌面 16:9 的 vh ≈ 1130，
-// 1130 / 6 ≈ 190，于是取 190 的递增序列 190/430/700/1030/1400。
+// 阈值按「每个带约占可见高度的 1/6」标定：桌面 16:9 的 vh ≈ 1565，
+// 1565 / 6 ≈ 260，于是取 260 的递增序列 260/520/780/1040/1400。
 // 这样六档在观感上是均匀递进的，而不是「浅滩一大坨、深海看不见」。
 export const MAX_DEPTH = 1400;
+
+// 「水体标定跨度」—— 地形各参数（岛屿半径、斜坡落差、水深剖面）的**设计基准**。
+//
+// ⚠ 它是一个**常量**，不是 WORLD.y1。这一点必须分清楚：
+//   WORLD.y1 是世界几何（相机能走到哪），会为了「竖屏也放得下水线」而调整
+//   （1900 → 2900）；而 SEA_SPAN 是「这套地形公式按多大的海来设计」。
+//   早期我让 SEA_SPAN = WORLD.y1，结果 y1 一改，岛屿半径、斜坡落差全跟着变，
+//   修 A 坏 B（把 y1 拉深以修竖屏构图，孤岛立刻被放大并推出屏幕，
+//   实测岛心相对位置从 +0.42 掉到 -0.36）。
+//   钉成常量后，调整世界几何不会再重塑地貌本身。
+export const SEA_SPAN = 1900;
 
 export const BANDS = [
   { id: 'land', key: 'band.land', max: 0 },
@@ -130,6 +149,8 @@ export function isTerrainType(id) {
 //   landHeightAt(x,y) -> 岸上地形起伏（只在 depth < 0 时有意义）
 //   temperatureAt(x)  -> 0..1 暖 → 冷，供群系混色使用
 //   samplePoint(band) -> 在指定水深带内找一个生成点
+//   homePoint()       -> 出生水线位置（**返回水线 y，不是相机中心**，
+//                        相机偏移由 main.goHome 按 vh 计算）
 export function createTerrain(opts = {}) {
   const type = isTerrainType(opts.type) ? opts.type : 'shore';
   const { seed, rng } = makeRng(opts.seed == null ? 'shore' : opts.seed);
@@ -151,8 +172,8 @@ export function createTerrain(opts = {}) {
   // 0.30~0.44 时水线只在世界上部游走：左上角略高于水线（一片斜切的沙滩），
   // 右下角已深入深海，陆地占比稳定在 25~35%。
   // 用比例而不是绝对落差，是为了让世界尺寸变化时观感保持稳定。
-  p.slopeSpan = rangeFrom(rng, 0.3, 0.44); // 水线跨越的高度 = WORLD.h * slopeSpan
-  p.slopeA = (WORLD.h * p.slopeSpan) / (p.sx1 - p.sx0);
+  p.slopeSpan = rangeFrom(rng, 0.3, 0.44); // 水线跨越的高度 = SEA_SPAN * slopeSpan
+  p.slopeA = (SEA_SPAN * p.slopeSpan) / (p.sx1 - p.sx0);
   p.sy1 = p.sy0 + (p.sx1 - p.sx0) * p.slopeA;
 
   // 岸线整体起伏（三种类型共用）
@@ -174,9 +195,14 @@ export function createTerrain(opts = {}) {
   //   四周留得下沙滩 → 浅水 → 近岸 → 外海 → 深渊的完整环带。
   //   （早期 430~590 看着接近这个区间，但当时世界高只有 1120，
   //     换算到 1400 高的世界应该同比放大，这里就按绝对占比重新标定。）
+  //   ⚠ 11B 修订：半径改为按**水体跨度**标定，不按 WORLD.h。
+  //     WORLD.h 现在含大片陆地余量（为竖屏预留），直接拿它当基准会把岛放大。
+  //     SEA_SPAN（= y1 = 1900）才是「海有多深」的真实尺度：
+  //     0.24~0.32 → 456~608，岛占屏幕小一半，四周留得下完整环带。
+  const vhRef = SEA_SPAN;
   p.islX = rangeFrom(rng, WORLD.x0 + WORLD.w * 0.35, WORLD.x0 + WORLD.w * 0.65);
-  p.islY = rangeFrom(rng, WORLD.y0 + WORLD.h * 0.18, WORLD.y0 + WORLD.h * 0.30);
-  p.islR = rangeFrom(rng, WORLD.h * 0.3, WORLD.h * 0.4);
+  p.islY = rangeFrom(rng, SEA_SPAN * 0.18, SEA_SPAN * 0.30);
+  p.islR = rangeFrom(rng, vhRef * 0.24, vhRef * 0.32);
   p.islWobble = rangeFrom(rng, 0.1, 0.26);
 
   // 通用相位
@@ -215,12 +241,22 @@ export function createTerrain(opts = {}) {
     const sl = shoreLineAt(x);
     const uphill = sl - y; // 越大表示越往内陆
     if (uphill <= 0) return 0;
+
+    // 内陆方向的高度剖面：两段式。
+    //   近岸段 [0, beachW)：线性抬升 —— 沙滩该有的缓坡。
+    //   内陆段 ≥ beachW：继续缓缓升高（backshore），形成沙丘背景。
+    // 之所以要第二段：世界为了竖屏预留了很长的陆地余量（见文件顶部 ⑤），
+    // 若第一段之后直接封顶成一片平地，玩家往上拖一千多单位会看到
+    // 一块毫无信息量的纯色平台，而且「陆地占比」统计会被这块空地撑到 47%。
     const t = clamp(uphill / p.beachW, 0, 1);
-    const h = t * p.beachW; // 线性抬升
+    const h = t * p.beachW;                          // 沙滩段抬升
+    const inland = Math.max(0, uphill - p.beachW);   // 越过沙滩后的内陆距离
+    // 内陆抬升同样饱和，避免长出一堵贯穿视口的土墙
+    const back = clamp(inland / 600, 0, 1) * 170;    // 最多再抬 170
     const dune = fbm1(x * 0.002 + p.nPhase * 1.7, 3) * 40 * t;
-    // 上限 240：不封顶的话 slope 型会在岸上长出一堵贯穿整个视口的土墙。
-    // 这个值同时保证 y0=-180 到水线之间始终留得下一段完整沙滩。
-    return clamp(Math.max(0, h + dune), 0, 240);
+    // 上限 400：沙滩段(~170) + 内陆段(170) + 起伏(40) 的合理上界。
+    // 不再用 240 —— 那会把内陆段压平，正是上面说的「空白平台」。
+    return clamp(Math.max(0, h + back + dune), 0, 400);
   }
 
   // —— 浅水剖面：水线处 depth = 0，往外平滑加深，最终饱和到 MAX_DEPTH ——
@@ -332,27 +368,29 @@ export function createTerrain(opts = {}) {
     return best || fallback;
   }
 
-  // 每种地形推荐的家（出生点 + 初始相机）。相机 clamp 由 camera 模块做，
-  // 这里只给出「玩家一睁眼该看到什么」。
+  // 每种地形推荐的「家」。
   //
-  // ⚠ 出生点要表达的是「水线出现在可见区的哪个高度」，所以偏移量必须按
-  // 可见高度来算，不能写死常数。曾经写死 700，在 3600 高的世界里相机居中后
-  // 水线被顶到屏幕最上沿，沙滩整片跑出画面（首屏看不到岸）。
-  // 现在的做法：把 y 定在「水线往下 SHORE_DROP」，再由相机居中，
-  // 水线自然落在可见区偏上的位置。
-  const SHORE_DROP = 250;
-
+  // 【契约】返回 { x, y, span }：
+  //   x / y —— 构图锚点的世界坐标（**不是相机中心**，相机偏移由 main.goHome 算）
+  //   span  —— 该锚点向下应该展示多少世界高度（= 景物本身的纵向尺度）。
+  //            相机偏移取 max(span*0.5, vh*0.26)，这样：
+  //              · 小景（平岸/斜岸，span 小）→ 按视口走，水线稳定在屏幕 1/4 处
+  //              · 大景（孤岛，span≈直径）→ 按岛的尺寸走，保证整岛入画
+  //            早先只返回 y 且三种地形都用 vh*0.26，结果孤岛被偏出屏幕
+  //            （实测相对位置 0.62~1.03），因为岛比一屏还高。
   function homePoint() {
     if (type === 'island') {
-      // 站到岛的「下缘」外侧（y 方向 +R 越过岛缘），这样视野里上方是岛的沙滩、
-      // 下方是向外逐级变深的环带。若把家放在岛心（p.islY），整屏都是陆地。
-      return { x: p.islX, y: p.islY + p.islR + SHORE_DROP * 0.4 };
+      // 锚点 = 岛心（不是岛缘）。岛心到岛缘的垂直距离就是 islR，
+      // 所以 span = 2*islR 表示「整座岛的纵向直径」。
+      return { x: p.islX, y: p.islY, span: p.islR * 2 };
     }
     if (type === 'slope') {
       // slope 的岸线往右下扫，如果家放在左上段，一屏里几乎全是陆地。
-      // 反过来解：找一个 x，让水线正好落在「可见区上部」，这样相机居中后
+      // 反过来解：找一个 x，让水线落在「水体上部」，这样相机居中后
       // 上方是斜切的沙滩、下方是开阔的海 —— 这才是 slope 该有的样子。
-      const target = WORLD.y0 + WORLD.h * 0.30;
+      // 目标水线高度用 SEA_SPAN 而不是 WORLD.h —— WORLD.h 含为竖屏预留的
+      // 陆地余量，拿它算 target 会把水线压到很低的 y。
+      const target = SEA_SPAN * 0.30;
       let hx = WORLD.x0 + WORLD.w * 0.5;
       for (let i = 0; i < 24; i++) {
         const sl = shoreLineAt(hx);
@@ -361,11 +399,11 @@ export function createTerrain(opts = {}) {
         else break;
         hx = clamp(hx, WORLD.x0 + 200, WORLD.x1 - 200);
       }
-      return { x: hx, y: shoreLineAt(hx) + SHORE_DROP };
+      return { x: hx, y: shoreLineAt(hx), span: 0 };
     }
     // shore：岸边浅水，抬头能看到沙滩
     const hx = WORLD.x0 + WORLD.w * 0.42;
-    return { x: hx, y: shoreLineAt(hx) + SHORE_DROP };
+    return { x: hx, y: shoreLineAt(hx), span: 0 };
   }
 
   return {

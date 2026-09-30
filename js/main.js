@@ -25,7 +25,7 @@ import { createEcosystem } from './systems/ecosystem.js';
 import { createMode } from './systems/mode.js';
 import { createBuild } from './systems/build.js';
 import { createWorld, worldById } from './systems/worlds.js';
-import { createTerrain, WORLD, isTerrainType, terrainTypes, bandAt as bandOf } from './systems/terrain.js';
+import { createTerrain, WORLD, isTerrainType, terrainTypes, bandAt as bandOf, BANDS } from './systems/terrain.js';
 import { createCamera } from './systems/camera.js';
 import { rareCompanionUnlocked } from './core/seed.js';
 import { Companion, COMPANION_VARIANTS } from './entities/companion.js';
@@ -53,6 +53,7 @@ import { FishSchool } from './entities/fish.js';
 import { Turtle } from './entities/turtle.js';
 import { Whale } from './entities/whale.js';
 import { Plankton, Bubble, Seaweed, Ripple, Bait, Celebrate } from './entities/env.js';
+import { createLife, pickLife } from './entities/life.js';
 
 // ---------- 画布 ----------
 const canvas = document.getElementById('ocean-canvas');
@@ -69,6 +70,23 @@ const seaweeds = [];
 const ripples = [];
 const baits = [];
 const secrets = [];
+// 阶段十一 B：人类与生活元素（游泳者/船/灯塔/海鸥/贝壳…）
+const life = [];
+// 本局已经「看见过」的元素类别（内存态）。explore.discover 已经会跨存档去重，
+// 这个表只是为了省掉每帧一次 String 拼接 + Set 查询。
+const sightedKinds = {};
+
+// 水深带跟踪（探索发现用）。声明必须在这里 —— setTerrain / refreshDepthBand
+// 都会写它，而 setTerrain 在启动早期就会被调用；若声明留在文件下方的
+// `let lastBandId = null`，赋值会撞上 TDZ 直接抛 ReferenceError。
+let lastBandId = null;
+const BAND_ORDER = BANDS.map((x) => x.id);
+const BAND_INDEX = {};
+BAND_ORDER.forEach((id, i) => { BAND_INDEX[id] = i; });
+// 每个带的代表深度：跨档补记时用它反查 band 对象（bandAt 需要 depth 参数）
+const BAND_MID = {
+  land: -50, beach: 75, shallow: 265, nearshore: 540, midsea: 865, deepsea: 1200,
+};
 
 // ---------- 子系统 ----------
 const audio = createAudio();
@@ -212,6 +230,15 @@ if (typeof window !== 'undefined') {
     bandAt(x, y) { const b = bandOf(terrainRef.current.depthAt(x, y)); return { id: b.id, key: b.key }; },
     depthAt(x, y) { return terrainRef.current.depthAt(x, y); },
     get home() { return terrainRef.current.homePoint(); },
+    /** 生命元素：数量 / 类型分布 / 世界坐标（测试与调试用） */
+    get life() {
+      return life.map((it) => ({ kind: it.constructor.name, x: Math.round(it.x), y: Math.round(it.y) }));
+    },
+    /** 命中测试：给定世界坐标是否点中某个生命元素 */
+    lifeHit(x, y) {
+      const hit = pickLife(life, x, y);
+      return hit ? hit.constructor.name : null;
+    },
     /** 切地形并回到该地形的家。11B 的「新建世界」面板会走同一条路径。 */
     setTerrain(type, seed) {
       setTerrain(type, seed);
@@ -230,13 +257,62 @@ function setTerrain(type, seed, { announce = false } = {}) {
   terrainRef.current = createTerrain({ type: ty, seed: seed || '' });
   for (const fn of terrainRebuildHooks) fn(terrainRef.current);
   if (announce) hud.toastKey('terrain.changed', { name: t('terrain.' + ty) });
+  // 换地形后水深带必然变化：把上一次的带清掉，否则新地形若恰好落在同一个带，
+  // HUD 不会刷新（`b.id === lastBandId` 提前 return），玩家会看到旧标签。
+  lastBandId = null;
+  // 岸线本身也算一次发现 —— 三种地形各自望见一次
+  if (explore) {
+    // 放到下一个宏任务里：setTerrain 在启动早期就会被调用（此时 explore 可能
+    // 尚未构造完成），而发现播报要等 HUD 就绪才好看。
+    setTimeout(() => {
+      if (explore.discover('terrain:' + ty)) {
+        hud.toastKey('discover.terrain', { name: t('terrain.' + ty) });
+      }
+    }, 0);
+  }
   return terrainRef.current;
 }
 
-/** 把玩家 + 相机放到该地形的「家」 */
+/**
+ * 把玩家 + 相机放到该地形的「家」。
+ *
+ * 目标构图：**水线落在可见区上方约 1/4 处**（0.26），上方是沙滩/陆地，
+ * 下方是逐级变深的海。三种地形、所有视口都一样。
+ *
+ * 地形层的 homePoint() 只返回「水线在世界里的 y」；偏移量必须在这里算，
+ * 因为「水线该出现在屏幕哪个高度」是视口相关的事，地形不知道 vh。
+ *
+ * 【为什么要夹住偏移量】
+ *   理想位置是 cy = waterline + vh*0.26。但相机有世界边界（见 camera.bounds），
+ *   当视口很高（手机竖屏 vh 能到 2160）时，cy + vh 会超出世界水底 y1，
+ *   相机被夹回 y1-vh，于是水线被推到屏幕很下面 —— 实测竖屏水线落在 0.62，
+ *   玩家看到的是「一片海，岸在屏幕中间偏下」，构图和桌面完全不一致。
+ *
+ *   不能靠「把世界做大」解决：世界变高 → 竖屏的 vh 同比变大 → 需求同比变大，
+ *   这是个追不上的循环（实测不动点要求 h≈7400，世界会变成一条细长海沟，
+ *   桌面缩放直接崩掉）。
+ *
+ *   正确做法是承认「高视口放不下理想构图」，改为**退让**：
+ *   把偏移量压到相机容许的最大值，让水线尽量靠上，而不是硬顶在边界。
+ *   竖屏下最终水线约在 0.35~0.45，比桌面略低但仍是「上陆下海」的构图；
+ *   桌面/横屏不受影响，依然精确命中 0.26。
+ */
 function goHome(snap) {
   const h = terrain.homePoint();
-  cam.centerOn(h.x, h.y, snap !== false);
+  // 偏移量取「景物尺度」和「视口尺度」的较大者：
+  //   span*0.5 —— 让景物（尤其孤岛）完整入画，不被偏出屏幕
+  //   vh*0.26  —— 让水线落在可见区上方 1/4 处（shore / slope 的常规构图）
+  // 二者取 max 而不是分地形写分支，是为了让新增地形自动获得合理构图。
+  const off = Math.max((h.span || 0) * 0.5, cam.vh * 0.26);
+  let cy = h.y + off;
+  // 相机 y 的合法区间（与 camera.bounds 保持一致）。
+  // 高视口（竖屏 vh 能到 2100+）下 cy + vh 会超出世界水底 y1，
+  // 此时只能退让、把景物放到屏幕更下方 —— 靠放大世界解决不了，
+  // 因为世界变高时 vh 同比变大，需求会一起涨（实测不动点要 h≈7400）。
+  const minY = WORLD.y0;
+  const maxY = Math.max(WORLD.y0, WORLD.y1 - cam.vh);
+  cy = Math.max(minY, Math.min(maxY, cy));
+  cam.centerOn(h.x, cy, snap !== false);
 }
 
 let companionVariantId = 'lucy';
@@ -701,9 +777,15 @@ const createPanel = createWorldPanel({
     // 否则它会一直盖在 canvas 上面，玩家看不见（也玩不到）刚生成的世界。
     home.enter();
   },
-  onPreview: (worldType, seed) => {
+  onPreview: (worldType, seed, terrainType) => {
     // 实时预览：按群系更新背景叠加色（不落盘、不重建世界）
     zones.setWorldProvider(createWorld({ type: worldType, seed }));
+    // 地形预览：把面板选中的岸线也切过去，方便玩家临场对比
+    const ty = isTerrainType(terrainType) ? terrainType : 'shore';
+    if (terrainRef.current.type !== ty) {
+      setTerrain(ty, seed || '');
+      goHome(true);
+    }
   },
   onToast: (k) => hud.toast(k),
 });
@@ -810,6 +892,9 @@ function clearWorld() {
   bubbles.length = 0;   // 修复原版内存累积
   ripples.length = 0;
   baits.length = 0;
+  life.length = 0;
+  // 清空「本局已看见」缓存：换世界后重新播报一次，玩家才知道新岸线上有什么
+  for (const k of Object.keys(sightedKinds)) delete sightedKinds[k];
 }
 
 function seedWorld(keepJelly) {
@@ -879,6 +964,8 @@ function seedWorld(keepJelly) {
     const s = spawnSpot('shallow');
     bubbles.push(new Bubble(s.x, rand(s.y, vr.y1)));
   }
+  // 阶段十一 B：人类与生活元素（按地形 + 种子确定性布点）
+  seedLife();
 }
 
 /** 软重建：保留全部现有水母，只重置环境 */
@@ -922,6 +1009,10 @@ function restorePond() {
   } else {
     goHome(true);
   }
+  // 同步「上次落盘位置」基准：否则恢复后的第一帧就会判定成「移动了」，
+  // 立刻把同一个坐标再写一遍（无害但白费一次 localStorage 写入）。
+  lastSavedCamX = camera.x;
+  lastSavedCamY = camera.y;
   const params = save.restoreParams();
   if (!params || !params.length) {
     seedWorld(null);
@@ -937,7 +1028,53 @@ function restorePond() {
   }
   // 环境照常生成（鱼群 / 海龟 / 浮游 / 气泡 / 海草）
   seedEnvironment();
+  // 阶段十一 B：人类与生活元素
+  seedLife();
   ensureDailyRare();
+}
+
+/**
+ * 阶段十一 B：生成人类与生活元素。
+ * 布点由 (地形, 种子) 决定 —— 同种子同布点，回到上次的位置会看到同一群人。
+ * 密度随 quality 分级缩水（低配少一些，保住帧率）。
+ */
+function seedLife() {
+  life.length = 0;
+  // 世界种子：优先用群系种子，保证「抄同一个种子码 = 同一片海 + 同一批人」
+  const seed = (worldRef.current && worldRef.current.seedStr) || terrainRef.current.seedStr || '';
+  // 密度直接读 quality 档位的 life 键（见 config.QUALITY_TIERS）。
+  // 早先这里是一段内联启发式（`isMobile ? 0.7 : 1.0` × 按 jellyfish 猜档位），
+  // 问题是它把「生活元素密度」和「水母数量」耦合成同一个判断 ——
+  // 以后只要有人调水母档位，岸上元素会莫名其妙跟着变。现在分开了。
+  const dens = typeof quality.life === 'number' ? quality.life : (isMobile ? 0.7 : 1.0);
+  const items = createLife(terrainRef.current, seed, dens);
+  for (const it of items) life.push(it);
+}
+
+/**
+ * 点击生命元素：播放其互动并从返回值里取出副作用
+ * （音效 / 涟漪 / 提示 / 收集计数）。
+ */
+let shellsFound = 0;
+
+function tapLife(wx, wy) {
+  const hit = pickLife(life, wx, wy);
+  if (!hit) return false;
+  const r = hit.onTap && hit.onTap();
+  if (!r) return true;          // 命中了但这次不产生副作用（如已拾起的贝壳）
+  if (r.sfx) audio.sfx(r.sfx);
+  if (r.ripple) ripples.push(new Ripple(r.ripple.x, r.ripple.y, r.ripple.r));
+  if (r.toast) {
+    // 贝壳这类可拾取物：toast 里带上累计数量，玩家能感到「在收集」。
+    // 不新开 HUD 槽位 —— 拾取是低频动作，常驻一个计数反而挤占画面。
+    if (r.collect) {
+      shellsFound += r.collect;
+      hud.toastKey('life.shells', { n: shellsFound });
+    } else {
+      hud.toast(r.toast);
+    }
+  }
+  return true;
 }
 
 /** 只生成环境实体（鱼群 / 海龟 / 浮游 / 气泡 / 海草），不动水母 */
@@ -1101,6 +1238,11 @@ const interact = createInteract(canvas, {
     const wx = cam.toWorldX(sx);
     const wy = cam.toWorldY(sy);
     const x = wx, y = wy;
+    // 阶段十一 B：生命元素优先于其他命中。
+    // 理由：它们是「实体物件」，而水面点击是「环境操作」——
+    // 点在贝壳上应该拾贝壳，不是激涟漪。只在非建造模式下才让它们抢焦点，
+    // 否则建造时想在水里放构件会被浅滩的游泳者挡住。
+    if (!buildPlace.active && tapLife(x, y)) return;
     // 建造模式优先：点海域落位 / 点已放置构件移除
     if (buildPlace.active) {
       if (buildPlace.remove) {
@@ -1301,6 +1443,35 @@ scheduler.add({
   draw: (c) => whale.draw(c),
 });
 scheduler.add(createLightRays());
+// 阶段十一 B：人类与生活元素。
+// order 3 —— 画在光束之上、水母之下：它们是「远景人事」，
+// 不该盖住作为主角的水母，但要盖住背景与光束。
+scheduler.add({
+  id: 'life', space: 'world', order: 3,
+  update: (dt) => {
+    const vr = cam.visibleRect(160);
+    for (const it of life) {
+      // 视口裁剪：只有可见（含一屏缓冲）的元素才更新，省掉大量无用计算
+      if (it.x < vr.x0 || it.x > vr.x1 || it.y < vr.y0 || it.y > vr.y1) continue;
+      it.update(dt);
+      // 发现机制：某类元素第一次进入视野时播报一次（explore 内部去重，
+      // 所以这里每帧调用也不会重复弹）。
+      if (it.kind && !sightedKinds[it.kind]) {
+        sightedKinds[it.kind] = true;
+        if (explore.discover('life:' + it.kind)) {
+          hud.toastKey('discover.life', { name: t('life.name.' + it.kind) });
+        }
+      }
+    }
+  },
+  draw: (c) => {
+    const vr = cam.visibleRect(160);
+    for (const it of life) {
+      if (it.x < vr.x0 || it.x > vr.x1 || it.y < vr.y0 || it.y > vr.y1) continue;
+      it.draw(c);
+    }
+  },
+});
 scheduler.add({
   id: 'seaweed', space: 'world', order: 3,
   entities: seaweeds,
@@ -1472,15 +1643,67 @@ scheduler.add({
 // ---------- 水深带 HUD ----------
 // 显示的是「相机中心所处的水深带」，也就是玩家眼下看到的这片水有多深。
 // 只在文案真正变化时才碰 DOM，避免每 500ms 触发重排。
-let lastBandId = null;
+// （lastBandId / BAND_* 的声明在文件上方 —— setTerrain 也会用到它们。）
+//
+// 相机中心所在的水深带变化时刷新 HUD，并把它当成一次「发现」。
+//
+// 注意时序：这个函数由 500ms 的节流器驱动，不是每帧。相机快速拖动时
+// 中间会跨过好几个带，我们只记录「停下来时所在的那个带」——这是有意的，
+// 因为玩家真正「抵达」的是一个停留点，而不是一个过路点。
+// 但**发现**必须逐个补记：否则从浅水直接冲到深海，中间三档就永久错过了。
+// 这里用一趟补齐遍历，代价是几毫秒，换来的是「探索记录不会漏档」。
 function refreshDepthBand() {
   const cxw = camera.x + cam.vw * 0.5;
   const cyw = camera.y + cam.vh * 0.5;
   const depth = terrain.depthAt(cxw, cyw);
   const b = bandOf(depth);
+  if (!b) return;
+  // lastBandId 可能是 null（换地形后被主动清空过），此时必须继续往下走：
+  // 若直接返回，玩家换到另一个地形后 HUD 会一直停在旧标签上。
   if (b.id === lastBandId) return;
+
+  const prevIdx = BAND_INDEX[lastBandId] != null ? BAND_INDEX[lastBandId] : -1;
+  const nowIdx = BAND_INDEX[b.id] != null ? BAND_INDEX[b.id] : 0;
   lastBandId = b.id;
   hud.refreshZone(b.key);
+
+  // 首次抵达某个水深带 -> 播报 + 记入探索
+  if (explore.discover('band:' + b.id)) {
+    hud.toastKey('discover.band', { name: t(b.key) });
+  }
+  // 跨档时把沿途跳过的带也一起记上（顺序：由浅到深或由深到浅）。
+  // prevIdx === -1 表示「刚换过地形、没有已知起点」，此时只有目标带值得记，
+  // 不做补记 —— 否则从 shore 换到 island 会瞬间把六个带全部判为已发现。
+  if (prevIdx >= 0 && Math.abs(nowIdx - prevIdx) > 1) {
+    const step = nowIdx > prevIdx ? 1 : -1;
+    for (let i = prevIdx + step; i !== nowIdx; i += step) {
+      const id = BAND_ORDER[i];
+      if (id && explore.discover('band:' + id)) {
+        hud.toastKey('discover.band', { name: t(bandOf(BAND_MID[id]).key) });
+      }
+    }
+  }
+}
+
+// ---------- 相机位置落盘（节流） ----------
+// 相机移动本身不改变游戏状态，所以历史上没有触发存档 —— 后果是「走了一段路、
+// 刷新页面又回到出生点」，玩家会以为进度丢了。这里按位移阈值 + 时间节流补上：
+//   · 位移 < 24 世界单位：不动。抖动级别的位置变化不值得写盘。
+//   · 距上次写盘 < 1500ms：不动。避免拖动时每帧一次 localStorage 写入。
+// 用「阈值 + 节流」而不是每帧 markDirty，是因为 markDirty 只置一个布尔位，
+// 真正的写入由 3s 定时器做 —— 但若一直不置位，定时器就永远什么都不写。
+let lastSavedCamX = null;
+let lastSavedCamY = null;
+let camSaveAt = 0;
+function saveCameraIfMoved(t) {
+  const dx = Math.abs(camera.x - lastSavedCamX);
+  const dy = Math.abs(camera.y - lastSavedCamY);
+  if (dx < 24 && dy < 24) return;
+  if (t - camSaveAt < 1500) return;
+  lastSavedCamX = camera.x;
+  lastSavedCamY = camera.y;
+  camSaveAt = t;
+  save.markDirty();
 }
 
 // ---------- 计时 ----------
@@ -1504,6 +1727,8 @@ function loop(t) {
 
   // 相机先更新（缓动 + 键盘推进），随后所有世界层绘制都用世界坐标
   cam.update(dt);
+  // 走远之后把新位置记进存档（内部有位移阈值 + 时间节流）
+  saveCameraIfMoved(t);
 
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   scheduler.tick(ctx, dt, t, camera);
