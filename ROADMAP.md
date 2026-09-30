@@ -174,6 +174,10 @@
 | 阶段二 | 变异事件 + 成就闭环 | ✅ 已完成 | `gameplay/achievements.js`、`entities/env.js`(Celebrate) |
 | 阶段三 | 截图分享 + 引水母归巢 | ✅ 已完成 | `ui/share.js`、`systems/activity.js` |
 | 阶段四 | 设置 / 每日稀有客 / 引导 / 无障碍 | ✅ 已完成 | `ui/settings.js`、`gameplay/daily.js`、`ui/coach.js` |
+| 阶段五 | 活的海：洋流 + 生态链 + 温和大鱼 | ✅ 已完成 | `systems/current.js`、`systems/ecosystem.js`、`entities/bigfish.js` |
+| 阶段六 | 繁育与成长：基因 + 生物荧光经济 + 专长 | ✅ 已完成 | `gameplay/genes.js`、`gameplay/breeding.js`、`gameplay/economy.js`、`gameplay/specialize.js`、`ui/lab.js` |
+| 阶段七 | 深潜与故事：海域 + 秘密 + 环境叙事 + 目标 | ✅ 已完成 | `systems/zones.js`、`gameplay/explore.js`、`entities/secret.js`、`gameplay/story.js`、`systems/quests.js`、`ui/atlas.js` |
+| 阶段八 | 打磨：自适应音画 + 本地排行 | ⏳ 待开始 | — |
 
 **交付物清单**（相比原方案的设计，全部落地，无缩水）
 
@@ -184,5 +188,9 @@
 - 截图分享：📸 按钮离屏合成「主画布 + 池塘名 + 日期」PNG，优先 `navigator.share` 否则下载。
 - 轻量玩法：「引水母归巢」发光目标环，≥3 只入环持续 2s 触发成功奖励。
 - 打磨项：⚙ 设置面板（画质档 / 减弱动效 / 静音）、按日期种子的每日稀有客（金色光环）、首次 2 步引导、键盘可达 + focus 样式。
+- **活的海**（阶段五）：拖拽生成洋流推力与流线可视化，浮游→鱼群→水母的生态链，一条温和大鱼巡游并会「吓退」靠近的水母。
+- **繁育与成长**（阶段六）：水母带 4 项基因（体型 / 荧光 / 速度 / 触手），邻近成年自动繁育并遗传 + 变异；生物荧光货币与繁育 / 探索 / 收藏三系专长。
+- **深潜与故事**（阶段七）：三个深度海域（微光层 / 午夜层 / 深渊）按探索进度解锁并平滑过渡色调；海域内散布可点击的秘密（贝壳 / 神殿）；6 段环境叙事碎片随探索浮现；4 条目标串起长期动机。
+- **矢量图标**（阶段七后修）：HUD 全部改用内联 SVG，去除对 emoji 字体的依赖（此前无字体环境会渲染成空方块）。
 
-**质量保障**：每阶段均通过单测 + 无头 Chromium 端到端验证（含下载事件、`localStorage` 断言），线上复测零 JS 报错。
+**质量保障**：每阶段均通过单测 + 无头 Chromium 端到端验证（含下载事件、`localStorage` 断言），线上复测零 JS 报错。阶段七起本地 + 线上各跑 7 项 e2e 全绿（洋流 / 实验室 / 繁育 / 海域解锁 / 图鉴 / 秘密 / 专长）。
