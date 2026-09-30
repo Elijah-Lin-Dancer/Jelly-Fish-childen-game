@@ -282,10 +282,31 @@ const hud = createHud({
   openSettings: () => settings.toggle(),
 });
 
-// ---------- 生态系统 / 温和大鱼（阶段五 · 4.2） ----------
+// ---------- 生态系统 / 温和大鱼（阶段五 · 4.2；阶段八 8B 冒险掠食） ----------
 const ecosystem = createEcosystem({
   plankton, schools, jellyfish, current,
   onEvent: (k) => hud.toast(k),
+  getMode: () => mode.current,
+  // 冒险模式中档失败：叼走一只（优先保护特殊个体）
+  onSnatch: (j) => {
+    if (!mode.isAdventure() || !j || j.isMemory) return false;
+    // 保护：稀有 / 杂交 / 已被玩家点过多次的个体不放第一个牺牲
+    let victim = j;
+    if (j.rare || j.hybrid) {
+      victim = jellyfish.find((x) => !x.rare && !x.hybrid && !x.isMemory && x !== j) || null;
+      if (!victim) return false;    // 全是特殊个体 → 这次不叼
+    }
+    const i = jellyfish.indexOf(victim);
+    if (i < 0) return false;
+    jellyfish.splice(i, 1);
+    stats.snatched = (stats.snatched || 0) + 1;
+    hud.toastKey('adventure.snatch', { name: t('jelly.' + JELLY_PALETTES[victim.paletteIndex].key) });
+    ripples.push(new Celebrate(victim.x, victim.y, '255, 120, 120', 180));
+    for (let k = 0; k < 14; k++) bubbles.push(new Bubble(victim.x + rand(-26, 26), victim.y + rand(-18, 18), true));
+    save.markDirty();
+    return true;
+  },
+  isSheltered: (x, y) => build.isSheltered(x, y),
 });
 
 // ---------- 阶段六：繁育 + 繁育/专长面板 ----------
@@ -567,7 +588,11 @@ function maybeAnnounceRare() {
 function spawnJellyfish(x, y, juvenile) {
   const cap = quality.jellyfish * 2.5;
   if (jellyfish.length > cap) jellyfish.shift();
-  const j = new Jellyfish(x, y, undefined, { juvenile });
+  const j = new Jellyfish(x, y, undefined, {
+    juvenile,
+    // 冒险模式：水母可通过进食长得更大
+    growthCap: mode.isAdventure() ? 2.0 : 1.0,
+  });
   jellyfish.push(j);
   audio.bubble();
   save.markDirty();
@@ -587,6 +612,18 @@ function createBurst(x, y) {
     if (dx * dx + dy * dy < 150 * 150) j.scare();
   }
   audio.bubble();
+}
+
+/** 点击命中水母则计一次互动 */
+/** 最近浮游（冒险进食用） */
+function nearestPlankton(x, y) {
+  let best = null, bestD = Infinity;
+  for (const p of plankton) {
+    const dx = p.x - x, dy = p.y - y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < bestD) { bestD = d2; best = p; }
+  }
+  return best;
 }
 
 /** 点击命中水母则计一次互动 */
@@ -782,24 +819,40 @@ scheduler.add(createDepthHaze());
 scheduler.add({
   id: 'jellyfish', order: 7,
   update: () => {
+    const dtScale = dtGlobal / 16.667;
+    const adventure = mode.isAdventure();
+    // 当前海域的氧况：越深缺氧越快（约：深渊 12s、微光 22s 耗尽；浅海约 9s 回满）
+    const zid = zones.current;
+    const oxRate = zid === 'abyss' ? -0.0014 : zid === 'midnight' ? -0.00075 : 0.0018; // <0 缺氧 / >0 复氧
+
     for (const j of jellyfish) {
       j.update(dtGlobal, tGlobal);
       // 阶段五：洋流对水母施加力（浮力 / 惯性手感）
       const cur = current.sample(j.x, j.y, tGlobal);
       // 阶段八：海草带削弱局部洋流
       const calm = 1 - build.effectOf('calm', j.x, j.y);
-      j.vx += cur.vx * calm * 0.8 * (dtGlobal / 16.667);
-      j.vy += cur.vy * calm * 0.8 * (dtGlobal / 16.667);
+      j.vx += cur.vx * calm * 0.8 * dtScale;
+      j.vy += cur.vy * calm * 0.8 * dtScale;
       // 靠近饵料时轻微聚集
       const b = feeding.nearest(j.x, j.y);
       if (b) {
         const dx = b.x - j.x, dy = b.y - j.y;
         const d = Math.hypot(dx, dy) || 1;
         if (d < 300) {
-          const f = (1 - d / 300) * 0.06 * (dtGlobal / 16.667);
+          const f = (1 - d / 300) * 0.06 * dtScale;
           j.vx += (dx / d) * f;
           j.vy += (dy / d) * f;
         }
+      }
+      // 阶段八 8B（冒险）：靠近浮游时进食长大
+      if (adventure && !j.egg && !j.dormant) {
+        const pk = nearestPlankton(j.x, j.y);
+        if (pk) {
+          const d = Math.hypot(pk.x - j.x, pk.y - j.y);
+          if (d < j.r * 2.4) j.feed(1);
+        }
+        // 缺氧/复氧（深海）
+        j.oxygenate(oxRate, dtScale);
       }
     }
   },

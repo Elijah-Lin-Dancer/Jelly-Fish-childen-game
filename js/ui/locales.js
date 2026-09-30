@@ -180,6 +180,12 @@ export const LOCALES = {
     'build.removed': '{name} refunded',
     'build.broke': 'Not enough bioluminescence yet.',
     'build.empty': 'Nothing built yet.',
+
+    // ---- 冒险成长轴（阶段八 8B） ----
+    'adventure.hunt': 'A hungry fish is hunting...',
+    'adventure.snatch': 'A big fish took {name} away!',
+    'adventure.feed': 'Growing...',
+    'adventure.dormant': 'Too deep — it is going dormant.',
   },
 
   zh: {
@@ -358,6 +364,12 @@ export const LOCALES = {
     'build.removed': '已收回{name}',
     'build.broke': '生物荧光还不够。',
     'build.empty': '还没有放置任何构件。',
+
+    // ---- 冒险成长轴（阶段八 8B） ----
+    'adventure.hunt': '一条饥饿的大鱼正在捕猎……',
+    'adventure.snatch': '大鱼叼走了{name}！',
+    'adventure.feed': '正在长大……',
+    'adventure.dormant': '太深了——它正在休眠。',
   },
 };
 

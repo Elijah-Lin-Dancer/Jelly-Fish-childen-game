@@ -18,9 +18,9 @@ const MAX_PER_CHECK = 1;      // 每次检测最多发生一次繁育
 export function createBreeding({ jellyfish, cap, onBreed, getMutateBonus }) {
   let lastCheck = 0;
 
-  /** 成年判定：成长到位且非蛋水母；隐藏纪念水母不参与繁育 */
+  /** 成年判定：成长到位、非蛋、非休眠、且非隐藏纪念水母 */
   function isAdult(j) {
-    return j && !j.egg && !j.isMemory && j.scale >= 0.99 && j.age > 1500;
+    return j && !j.egg && !j.isMemory && !j.dormant && j.scale >= 0.99 && j.age > 1500;
   }
 
   function pickPalette(a, b) {

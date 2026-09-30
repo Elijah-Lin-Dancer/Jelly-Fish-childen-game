@@ -44,6 +44,14 @@ export class Jellyfish {
     this.lastBredAt = 0;
     this.bornAt = 0;
 
+    // 阶段八 8B：进食成长上限 / 缺氧 / 休眠
+    this.growthCap = opts.growthCap || 1.6;   // scale 可成长到的上限（冒险模式更高）
+    this.fed = 0;                            // 累计进食量（0..）
+    this.feedFlash = 0;                      // 进食时的微光
+    this.oxygen = 1;                         // 0..1；冒险模式下随深度变化
+    this.dormant = false;                    // 缺氧归零 → 休眠（缓慢沉底、停止繁育）
+    this.isMemory = false;                   // 隐藏纪念水母标记（由 Bogyo 设置）
+
     // 体型基因影响初始半径（±15%）
     const sizeMod = 0.85 + this.traits.size * 0.3;
     this.r *= sizeMod;
@@ -146,6 +154,35 @@ export class Jellyfish {
 
   scare() { this.scared = 1; }
 
+  /**
+   * 阶段八 8B：进食（冒险模式）。朝 growthCap 缓慢长大。
+   * 返回是否"刚跨过成长阈值"（用于触发形态反馈）。
+   */
+  feed(amount = 1) {
+    if (this.dormant) return false;
+    const before = this.scale;
+    this.fed += amount;
+    this.feedFlash = Math.min(1, this.feedFlash + 0.25);
+    // 每进食累计到一定量，scale 上限抬升一点点
+    if (this.scale < this.growthCap) {
+      this.scale = Math.min(this.growthCap, this.scale + 0.00035 * amount);
+    }
+    return this.scale > before;
+  }
+
+  /**
+   * 阶段八 8B：缺氧/复氧（冒险模式）。rate > 0 缺氧，< 0 复氧。
+   * 归零进入休眠；回到安全区自动苏醒。
+   */
+  oxygenate(rate, dtScale) {
+    this.oxygen = clamp(this.oxygen + rate * dtScale, 0, 1);
+    if (this.oxygen <= 0.001 && !this.dormant) this.dormant = true;
+    else if (this.oxygen > 0.25 && this.dormant) this.dormant = false;
+  }
+
+  /** 是否成年（供繁育使用，休眠个体不繁育） */
+  get canBreed() { return !this.egg && !this.dormant && this.scale >= 0.99 && this.age > 1500; }
+
   update(dt, t) {
     const dtScale = dt / 16.667;
 
@@ -159,6 +196,21 @@ export class Jellyfish {
       if (this.scale > 0.995) this.scale = 1;
     }
     if (this.flash > 0) this.flash = Math.max(0, this.flash - dt / 600);
+    if (this.feedFlash > 0) this.feedFlash = Math.max(0, this.feedFlash - dt / 700);
+
+    // 阶段八 8B：休眠个体（缺氧）缓慢沉底、几乎不动、不再被指针吸引
+    if (this.dormant) {
+      this.vy += 0.02 * dtScale;              // 缓慢下沉
+      this.vx *= Math.pow(0.94, dtScale);
+      this.vy *= Math.pow(0.94, dtScale);
+      this.x += this.vx * dtScale;
+      this.y += this.vy * dtScale;
+      const rr0 = this.r * this.scale;
+      if (this.y > view.H - rr0) { this.y = view.H - rr0; this.vy = 0; }
+      this.pulse = (Math.sin(this.phase) + 1) * 0.5;
+      this.attract *= Math.pow(0.85, dtScale);
+      return true;
+    }
 
     const pulse = (Math.sin(this.phase) + 1) * 0.5;
 
@@ -222,7 +274,9 @@ export class Jellyfish {
     const crowd = Math.min(1, 12 / Math.max(4, Jellyfish.__count || 12));
     // 辉光基因：0.6x..1.5x
     const glowGene = 0.6 + (this.traits ? this.traits.glow : 0.5) * 0.9;
-    const boost = (th.glowBoost * nightGlow + this.flash * 0.8) * (0.6 + crowd * 0.4) * glowGene;
+    // 休眠个体整体变暗（缺氧提示）
+    const dorm = this.dormant ? 0.45 : 1;
+    const boost = (th.glowBoost * nightGlow + this.flash * 0.8 + this.feedFlash * 0.4) * (0.6 + crowd * 0.4) * glowGene * dorm;
     // 杂交个体：柔和的青蓝附加光晕，作为"混血"标识
     if (this.hybrid) {
       ctx.save();
