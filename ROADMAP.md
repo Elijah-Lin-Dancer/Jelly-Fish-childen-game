@@ -177,8 +177,9 @@
 | 阶段五 | 活的海：洋流 + 生态链 + 温和大鱼 | ✅ 已完成 | `systems/current.js`、`systems/ecosystem.js`、`entities/bigfish.js` |
 | 阶段六 | 繁育与成长：基因 + 生物荧光经济 + 专长 | ✅ 已完成 | `gameplay/genes.js`、`gameplay/breeding.js`、`gameplay/economy.js`、`gameplay/specialize.js`、`ui/lab.js` |
 | 阶段七 | 深潜与故事：海域 + 秘密 + 环境叙事 + 目标 | ✅ 已完成 | `systems/zones.js`、`gameplay/explore.js`、`entities/secret.js`、`gameplay/story.js`、`systems/quests.js`、`ui/atlas.js` |
-| 阶段八 | 打磨：自适应音画 + 本地排行 | ⏳ 待开始 | — |
-| 隐藏内容 | Bogyó · 隐藏纪念水母（口令解锁，私人） | ✅ 已完成 | `js/memory.config.js`、`gameplay/memory.js`、`ui/memoryPad.js`、`entities/bogyo.js` |
+| 阶段八 A | 双模式 + 建造轴：和平/冒险自选 + 珊瑚工坊 | ✅ 已完成（8B 待做） | `systems/mode.js`、`systems/build.js`、`ui/buildPad.js`、`ui/modeSelect.js` |
+| 阶段八 B | 冒险成长轴：吃→长大 + 缺氧 + 大鱼调凶 | ⏳ 待开始 | — |
+| 隐藏内容 | Bogyó · 隐藏猫猫水母（口令解锁，私人） | ✅ 已完成 | `js/memory.config.js`、`gameplay/memory.js`、`ui/memoryPad.js`、`entities/bogyo.js` |
 
 **交付物清单**（相比原方案的设计，全部落地，无缩水）
 
@@ -192,6 +193,7 @@
 - **活的海**（阶段五）：拖拽生成洋流推力与流线可视化，浮游→鱼群→水母的生态链，一条温和大鱼巡游并会「吓退」靠近的水母。
 - **繁育与成长**（阶段六）：水母带 4 项基因（体型 / 荧光 / 速度 / 触手），邻近成年自动繁育并遗传 + 变异；生物荧光货币与繁育 / 探索 / 收藏三系专长。
 - **深潜与故事**（阶段七）：三个深度海域（微光层 / 午夜层 / 深渊）按探索进度解锁并平滑过渡色调；海域内散布可点击的秘密（贝壳 / 神殿）；6 段环境叙事碎片随探索浮现；4 条目标串起长期动机。
+- **双模式 + 建造轴**（阶段八 A）：新池塘开局自选「和平 / 冒险」（MC 式，模式锁进存档）；珊瑚工坊可布置珊瑚丛 / 礁石 / 灯塔 / 海草带四种预设构件，消耗生物荧光，各自产生生态效果（繁育倾向 / 庇护 / 产出提升 / 削弱洋流）。
 - **矢量图标**（阶段七后修）：HUD 全部改用内联 SVG，去除对 emoji 字体的依赖（此前无字体环境会渲染成空方块）。
 - **隐藏纪念内容**：设置面板标题连点 5 次浮出口令框，口令正确后一只名为 **Bogyó** 的橘白猫猫水母常驻海洋（歪耳 / 吐舌 / 浣熊环纹尾），并浮现一段匈牙利语微型故事。口令只存 SHA-256 摘要，明文不入库；内容文案集中在 `js/memory.config.js`，改字不碰逻辑。
 

@@ -887,3 +887,100 @@ body.current-mode #ocean-canvas { cursor: crosshair; }
   .memory-card-canvas { width: 132px; height: 132px; }
   .memory-line { font-size: 13px; }
 }
+
+/* ===== 建造面板（阶段八 8A） ===== */
+.build-panel { max-width: 400px; }
+.build-stats { display: flex; gap: 14px; padding: 0 18px 10px; font-size: 13px; opacity: 0.85; }
+.build-stat::before { content: '◈ '; color: var(--accent); }
+.build-list { display: flex; flex-direction: column; gap: 8px; padding: 0 14px 8px; }
+.build-item {
+  display: grid;
+  grid-template-columns: 26px 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(150, 210, 255, 0.2);
+  background: var(--btn-bg);
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s, transform 0.12s;
+}
+.build-item:hover { background: var(--btn-bg-hover); transform: translateX(2px); }
+.build-item.sel { border-color: var(--accent); box-shadow: 0 0 14px rgba(255, 216, 77, 0.28); }
+.build-item.poor { opacity: 0.5; }
+.build-item.remove { border-color: rgba(255, 150, 150, 0.24); }
+.build-item.remove.sel { border-color: #ff9a9a; box-shadow: 0 0 14px rgba(255, 154, 154, 0.3); }
+.build-ico { display: flex; align-items: center; justify-content: center; }
+.build-name { font-size: 14px; color: var(--hud-fg); }
+.build-owned {
+  font-size: 12px;
+  min-width: 20px;
+  text-align: center;
+  opacity: 0.7;
+  border-radius: 8px;
+  padding: 1px 6px;
+  background: rgba(150, 210, 255, 0.1);
+}
+.build-cost { font-size: 12px; color: var(--accent); letter-spacing: 0.5px; }
+.build-hint {
+  padding: 6px 18px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  opacity: 0.6;
+}
+
+/* ===== 选模式（阶段八 8A） ===== */
+.mode-select {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 8, 20, 0.82);
+  backdrop-filter: blur(6px);
+}
+.mode-card {
+  width: min(560px, 92vw);
+  text-align: center;
+  padding: 30px 26px;
+}
+.mode-title {
+  font-size: 24px;
+  letter-spacing: 2px;
+  color: var(--hud-fg);
+  margin-bottom: 6px;
+}
+.mode-sub {
+  font-size: 13px;
+  opacity: 0.6;
+  margin-bottom: 22px;
+}
+.mode-options { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.mode-opt {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(150, 210, 255, 0.24);
+  background: var(--btn-bg);
+  color: var(--hud-fg);
+  font-family: inherit;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.18s, border-color 0.18s, transform 0.12s;
+}
+.mode-opt:hover { background: var(--btn-bg-hover); transform: translateY(-3px); }
+.mode-opt.peace:hover { border-color: rgba(160, 255, 210, 0.6); }
+.mode-opt.adventure:hover { border-color: rgba(255, 180, 120, 0.65); }
+.mode-opt-name { font-size: 16px; letter-spacing: 1px; }
+.mode-opt-desc { font-size: 12px; line-height: 1.5; opacity: 0.66; }
+
+@media (max-width: 520px) {
+  .mode-options { grid-template-columns: 1fr; }
+  .mode-title { font-size: 20px; }
+}
+
+/* 建造模式：光标提示 */
+body.build-mode #ocean-canvas { cursor: cell; }

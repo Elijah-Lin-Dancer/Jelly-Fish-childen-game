@@ -31,6 +31,7 @@ export const LOCALES = {
     'btn.current': 'Guide the currents',
     'btn.lab': 'Breeding lab',
     'btn.atlas': 'Explore atlas',
+    'btn.build': 'Reef workshop',
     'btn.share': 'Save postcard',
     'btn.settings': 'Settings',
 
@@ -158,6 +159,27 @@ export const LOCALES = {
     'memory.pad.submit': 'Enter',
     'memory.pad.empty': 'Nothing entered.',
     'memory.pad.bad': 'That is not it.',
+
+    // ---- 双模式（阶段八 8A） ----
+    'mode.pick': 'Choose your ocean',
+    'mode.pickSub': 'This choice is fixed for this pond.',
+    'mode.peace': 'Peaceful',
+    'mode.peace.desc': 'Calm and endless. Build reefs, breed jellyfish and let Bogyó nap in the currents. Nothing can hurt them.',
+    'mode.adventure': 'Adventure',
+    'mode.adventure.desc': 'Tides grow restless. Feed jellyfish to grow them, dive deep for rare plankton — but a hungry big fish may take one home.',
+
+    // ---- 建造（阶段八 8A） ----
+    'build.title': 'Reef Workshop',
+    'build.hint': 'Pick a piece, then tap an open spot in the ocean. Beacon glows far and wide.',
+    'build.coral': 'Coral cluster',
+    'build.reef': 'Rocky reef',
+    'build.beacon': 'Beacon',
+    'build.kelp': 'Kelp bed',
+    'build.remove': 'Remove a piece',
+    'build.placed': '{name} placed',
+    'build.removed': '{name} refunded',
+    'build.broke': 'Not enough bioluminescence yet.',
+    'build.empty': 'Nothing built yet.',
   },
 
   zh: {
@@ -187,6 +209,7 @@ export const LOCALES = {
     'btn.current': '引导洋流',
     'btn.lab': '繁育实验室',
     'btn.atlas': '探索图鉴',
+    'btn.build': '珊瑚工坊',
     'btn.share': '保存明信片',
     'btn.settings': '设置',
 
@@ -314,6 +337,27 @@ export const LOCALES = {
     'memory.pad.submit': '确认',
     'memory.pad.empty': '还没有输入。',
     'memory.pad.bad': '不是这个。',
+
+    // ---- 双模式（阶段八 8A） ----
+    'mode.pick': '选择你的海洋',
+    'mode.pickSub': '这个选择将固定于当前池塘。',
+    'mode.peace': '和平模式',
+    'mode.peace.desc': '宁静无垠。可以布置珊瑚礁、繁育水母，让 Bogyó 在洋流里打盹。没有什么会伤害它们。',
+    'mode.adventure': '冒险模式',
+    'mode.adventure.desc': '海流渐急。喂食水母使其长大，潜入深处寻找稀有浮游——但要小心，饥饿的大鱼可能会带走一只。',
+
+    // ---- 建造（阶段八 8A） ----
+    'build.title': '珊瑚工坊',
+    'build.hint': '选一块构件，然后点海里的空位放置。灯塔的光会照得很远。',
+    'build.coral': '珊瑚丛',
+    'build.reef': '礁石',
+    'build.beacon': '灯塔',
+    'build.kelp': '海草带',
+    'build.remove': '移除构件',
+    'build.placed': '已放置{name}',
+    'build.removed': '已收回{name}',
+    'build.broke': '生物荧光还不够。',
+    'build.empty': '还没有放置任何构件。',
   },
 };
 

@@ -20,6 +20,7 @@ export function createHud(actions) {
     labBtn: document.getElementById('lab-btn'),
     bioText: document.getElementById('bio-text'),
     atlasBtn: document.getElementById('atlas-btn'),
+    buildBtn: document.getElementById('build-btn'),
     zoneText: document.getElementById('zone-text'),
     themeBtn: document.getElementById('theme-btn'),
     soundBtn: document.getElementById('sound-btn'),
@@ -126,6 +127,7 @@ export function createHud(actions) {
     if (el.currentBtn) el.currentBtn.addEventListener('click', () => actions.toggleCurrent && actions.toggleCurrent());
     if (el.labBtn) el.labBtn.addEventListener('click', () => actions.openLab && actions.openLab());
     if (el.atlasBtn) el.atlasBtn.addEventListener('click', () => actions.openAtlas && actions.openAtlas());
+    if (el.buildBtn) el.buildBtn.addEventListener('click', () => actions.openBuild && actions.openBuild());
     if (el.dnBtn) el.dnBtn.addEventListener('click', () => actions.toggleDayNight());
     if (el.nestBtn) el.nestBtn.addEventListener('click', () => actions.toggleActivity && actions.toggleActivity());
     if (el.shareBtn) el.shareBtn.addEventListener('click', () => actions.share && actions.share());

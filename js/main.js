@@ -22,6 +22,8 @@ import { createFeeding } from './systems/feeding.js';
 import { createActivity } from './systems/activity.js';
 import { createCurrent } from './systems/current.js';
 import { createEcosystem } from './systems/ecosystem.js';
+import { createMode } from './systems/mode.js';
+import { createBuild } from './systems/build.js';
 import { createCollection } from './gameplay/collection.js';
 import { createSave } from './gameplay/save.js';
 import { createAchievements } from './gameplay/achievements.js';
@@ -37,6 +39,8 @@ import { createAtlas } from './ui/atlas.js';
 import { Secret, seedSecrets } from './entities/secret.js';
 import { createMemory } from './gameplay/memory.js';
 import { createMemoryPad } from './ui/memoryPad.js';
+import { createBuildPad } from './ui/buildPad.js';
+import { createModeSelect } from './ui/modeSelect.js';
 import { Bogyo } from './entities/bogyo.js';
 import { dailyRareIndex } from './gameplay/daily.js';
 import { Jellyfish, JELLY_PALETTES } from './entities/jellyfish.js';
@@ -96,7 +100,11 @@ const collection = createCollection(
 );
 
 // 池塘存档：把当前水母落盘，重开即"你的池塘"
-const save = createSave(() => jellyfish);
+// 阶段八：存档元数据（mode / buildings）由 getMeta 注入
+const save = createSave(() => jellyfish, () => ({
+  mode: mode.serialize(),
+  buildings: build.serialize(),
+}));
 
 // 成就系统：解锁时弹 toast + 更新 HUD 星标
 const achievements = createAchievements((a) => {
@@ -106,13 +114,35 @@ const achievements = createAchievements((a) => {
 
 // ---------- 阶段六：生物荧光经济 + 专长 + 繁育 ----------
 const economy = createEconomy({
-  getMultiplier: () => specialize.multiplier(),
+  getMultiplier: () => specialize.multiplier() * build.yieldMultiplier(),
   onGain: () => { if (hud.refreshBio) hud.refreshBio(economy.bio); },
 });
 const specialize = createSpecialize(economy, (id, lv) => {
   hud.toastKey('lab.specUp', { name: t('spec.' + id), lv });
   if (hud.refreshBio) hud.refreshBio(economy.bio);
   if (lab.isOpen) lab.render();
+});
+
+// ---------- 阶段八：模式 + 建造 ----------
+const mode = createMode({
+  onMode: () => { save.markDirty(); },
+});
+const build = createBuild({
+  economy,
+  onPlaced: (mod, b) => {
+    hud.toastKey('build.placed', { name: t(mod.label) });
+    if (hud.refreshBio) hud.refreshBio(economy.bio);
+    save.markDirty();
+    void b;
+  },
+  onRemove: (b) => {
+    // 返还一半荧光
+    const mod = build.moduleOf(b.id);
+    if (mod) economy.gain(Math.round(mod.cost * 0.5));
+    hud.toastKey('build.removed', { name: t(mod ? mod.label : 'build.remove') });
+    save.markDirty();
+  },
+  onError: (k) => hud.toast(k),
 });
 
 function spawnEggJelly() {
@@ -151,6 +181,9 @@ const home = createHome({
     explore.reset();
     quests.reset();
     zones.setZone('shallow', true);
+    // 阶段八：重置模式与建造
+    build.reset();
+    mode.restore('peace');
     // 隐藏纪念内容一并清除（避免从重置状态反推）
     if (memory) memory.reset();
     bogyo = null;
@@ -245,6 +278,7 @@ const hud = createHud({
   isCurrentMode: () => current.mode,
   openLab: () => lab.toggle(),
   openAtlas: () => atlas.toggle(),
+  openBuild: () => buildPad.toggle(),
   openSettings: () => settings.toggle(),
 });
 
@@ -305,6 +339,40 @@ const quests = createQuests({
 const atlas = createAtlas({ explore, zones, story, quests });
 setZoneProvider(zones);   // 背景 / 景深读取海域色调
 
+// ---------- 阶段八：建造面板 + 选模式 ----------
+const buildPad = createBuildPad({
+  build, economy,
+  onToast: (k) => hud.toast(k),
+});
+// 建造"放置"流程：面板里选好模块后，进入放置模式，下一次点击海域即落位
+const buildPlace = { active: false, id: null, remove: false };
+
+// 新存档选模式：无存档时才弹
+const modeSelect = createModeSelect({
+  onPick: (m) => {
+    mode.set(m);
+    // 选定模式后正式建立新池塘
+    save.markDirty();
+    save.write();
+    hud.refreshZone && hud.refreshZone(zones.label);
+  },
+});
+
+buildPad.onSelectModule((id) => {
+  if (id) {
+    buildPlace.active = true;
+    buildPlace.id = id;
+    buildPlace.remove = false;
+    document.body.classList.add('build-mode');
+  } else {
+    // null = 进入移除模式
+    buildPlace.active = true;
+    buildPlace.id = null;
+    buildPlace.remove = true;
+    document.body.classList.add('build-mode');
+  }
+});
+
 // ---------- 隐藏纪念内容（Bogyó） ----------
 // 他不是水母：独立实体 + 独立调度条目，不进入 jellyfish 数组，
 // 因而不参与洋流 / 繁育 / 图鉴 / 存档。
@@ -313,6 +381,8 @@ let bogyo = null;
 /** 把 Bogyó 放进海洋（已存在则不重复添加） */
 function spawnBogyo(announce = true) {
   if (bogyo) return bogyo;
+  // 阶段八（决策 4）：冒险模式不出现 —— 他只在和平的家里安睡
+  if (mode.isAdventure()) return bogyo;
   const c = memory.content;
   bogyo = new Bogyo(rand(view.W * 0.25, view.W * 0.75), rand(view.H * 0.3, view.H * 0.6), {
     palette: c.palette,
@@ -431,6 +501,12 @@ function softRebuild() {
 
 /** 恢复上次的池塘；若无可恢复数据则生成全新世界 */
 function restorePond() {
+  // 阶段八：先恢复存档元数据（模式 / 建筑）
+  const meta = save.readMeta && save.readMeta();
+  if (meta) {
+    mode.restore(meta.mode);
+    build.restore(meta.buildings);
+  }
   const params = save.restoreParams();
   if (!params || !params.length) {
     seedWorld(null);
@@ -550,6 +626,36 @@ const interact = createInteract(canvas, {
     audio.unlock();
   },
   onTap: (x, y) => {
+    // 建造模式优先：点海域落位 / 点已放置构件移除
+    if (buildPlace.active) {
+      if (buildPlace.remove) {
+        // 找到最近的可移除构件（命中半径内）
+        let bi = -1, bd = Infinity;
+        build.list.forEach((b, i) => {
+          const d = Math.hypot(b.x - x, b.y - y);
+          if (d < 60 && d < bd) { bd = d; bi = i; }
+        });
+        if (bi >= 0) {
+          build.remove(bi);
+        } else {
+          buildPad.exitRemove();
+          buildPlace.active = false; buildPlace.remove = false;
+          document.body.classList.remove('build-mode');
+          hud.toast('build.empty');
+        }
+      } else if (buildPlace.id) {
+        if (build.place(buildPlace.id, x, y)) {
+          ripples.push(new Ripple(x, y));
+          for (let i = 0; i < 10; i++) bubbles.push(new Bubble(x + rand(-24, 24), y + rand(-16, 16), true));
+        }
+        // 一次放置后退出建造模式，避免连续误放
+        buildPad.clearSelection();
+        buildPlace.active = false; buildPlace.id = null;
+        document.body.classList.remove('build-mode');
+      }
+      save.markDirty();
+      return;
+    }
     if (feeding.mode) {
       feeding.drop(x, y);
       save.markDirty();
@@ -634,6 +740,10 @@ const scheduler = createScheduler();
 scheduler.add(createDayNight());
 scheduler.add(createBackground());
 scheduler.add({
+  id: 'build', order: 6,
+  draw: (c, t) => build.draw(c, t),
+});
+scheduler.add({
   id: 'whale', order: 1,
   update: (dt, t) => whale.update(dt),
   draw: (c) => whale.draw(c),
@@ -674,8 +784,10 @@ scheduler.add({
       j.update(dtGlobal, tGlobal);
       // 阶段五：洋流对水母施加力（浮力 / 惯性手感）
       const cur = current.sample(j.x, j.y, tGlobal);
-      j.vx += cur.vx * 0.8 * (dtGlobal / 16.667);
-      j.vy += cur.vy * 0.8 * (dtGlobal / 16.667);
+      // 阶段八：海草带削弱局部洋流
+      const calm = 1 - build.effectOf('calm', j.x, j.y);
+      j.vx += cur.vx * calm * 0.8 * (dtGlobal / 16.667);
+      j.vy += cur.vy * calm * 0.8 * (dtGlobal / 16.667);
       // 靠近饵料时轻微聚集
       const b = feeding.nearest(j.x, j.y);
       if (b) {
@@ -863,12 +975,16 @@ function start() {
   lab.bind();
   atlas.bind();
   memoryPad.bind();
+  buildPad.bind();
   if (hud.refreshZone) hud.refreshZone(zones.label);
   setupZoneContent(zones.current);
   if (hud.refreshActivity) hud.refreshActivity(false);
 
   // 恢复存档后立即评估一次（例如 déjà 满足的成就）
   achievements.check(stats, { type: 'init' });
+
+  // 阶段八：先判断是否"全新池塘"——必须在 restorePond 播种（会 markDirty）之前
+  const isFreshPond = !save.hasSave();
 
   // 优先恢复上次的池塘；无存档则生成新世界
   restorePond();
@@ -886,6 +1002,10 @@ function start() {
 
   // 首次进入引导（只显示一次），在进入池塘后弹出
   home.onEnter(() => {
+    // 阶段八：全新池塘 → 先让玩家选模式（MC 式）
+    if (isFreshPond) {
+      modeSelect.show();
+    }
     coach.start();
     maybeAnnounceRare();
   });

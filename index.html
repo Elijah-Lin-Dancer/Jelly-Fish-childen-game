@@ -42,6 +42,7 @@
   <div class="btn" id="feed-btn" role="button" tabindex="0" data-i18n-title="btn.feed" aria-label="Feed"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="14" r="6"/><circle cx="9.5" cy="12" r="1.6" class="ic-hi"/><circle cx="10" cy="2.6" r="1.5" class="ic-hi"/><circle cx="14" cy="4.4" r="1" class="ic-hi"/></svg></div>
   <div class="btn" id="current-btn" role="button" tabindex="0" data-i18n-title="btn.current" aria-label="Currents"><svg class="ic" viewBox="0 0 24 24"><path d="M2 9c3-2.6 6-2.6 9 0s6 2.6 9 0"/><path d="M2 15c3-2.6 6-2.6 9 0s6 2.6 9 0"/></svg></div>
   <div class="btn" id="atlas-btn" role="button" tabindex="0" data-i18n-title="btn.atlas" aria-label="Explore atlas"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15.6 8.4 13.5 13.5 8.4 15.6 10.5 10.5z"/></svg></div>
+  <div class="btn" id="build-btn" role="button" tabindex="0" data-i18n-title="btn.build" aria-label="Build"><svg class="ic" viewBox="0 0 24 24"><path d="M3 19l5-9 3 3 4-7 6 13z"/><path d="M9 10V6M15 6V3"/></svg></div>
   <div class="btn" id="lab-btn" role="button" tabindex="0" data-i18n-title="btn.lab" aria-label="Breeding lab"><svg class="ic" viewBox="0 0 24 24"><path d="M9 3h6"/><path d="M10.5 3.2v6.3L5.6 18a2 2 0 0 0 1.7 3h9.4a2 2 0 0 0 1.7-3l-4.9-8.5V3.2"/><path d="M7.6 15h8.8"/></svg></div>
   <div class="btn" id="nest-btn" role="button" tabindex="0" data-i18n-title="btn.nest" aria-label="Bring home"><svg class="ic" viewBox="0 0 24 24"><path d="M3 11 12 3l9 8"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5.5h4V20"/></svg></div>
   <div class="btn" id="share-btn" role="button" tabindex="0" data-i18n-title="btn.share" aria-label="Share"><svg class="ic" viewBox="0 0 24 24"><path d="M4 15v4.5h16V15"/><path d="M12 15V3.5"/><path d="m7.6 7.9 4.4-4.4 4.4 4.4"/></svg></div>
@@ -104,6 +105,20 @@
     <div class="atlas-story" id="atlas-story"></div>
     <div class="atlas-section-title">Quests</div>
     <div class="atlas-quests" id="atlas-quests"></div>
+  </div>
+</div>
+
+<div class="dex-modal hide" id="build-modal">
+  <div class="dex-panel build-panel">
+    <div class="dex-head">
+      <div class="dex-head-title" id="build-title">Reef Workshop</div>
+      <div class="dex-close" id="build-close" role="button" tabindex="0" aria-label="Close">✕</div>
+    </div>
+    <div class="build-stats">
+      <span class="build-stat" id="build-bio"></span>
+    </div>
+    <div class="build-list" id="build-list"></div>
+    <div class="build-hint" id="build-hint"></div>
   </div>
 </div>
 
