@@ -155,6 +155,7 @@ export const LOCALES = {
 
     'coach.step1': '👆 Move your pointer to attract jellyfish',
     'coach.step2': '✋ Hold to summon a new jellyfish — tap to unlock species',
+    'coach.step3': '🫧 Tap the bubble button (bottom-right) — feeding, building and more live there',
     'coach.next': 'Next',
     'coach.got': 'Got it',
     'coach.skip': 'Skip',
@@ -422,6 +423,7 @@ export const LOCALES = {
 
     'coach.step1': '👆 移动鼠标 / 手指吸引水母',
     'coach.step2': '✋ 长按召唤新水母 — 点击可解锁物种',
+    'coach.step3': '🫧 点右下角的泡泡钮 — 喂食、建造它们都住在里面',
     'coach.next': '下一步',
     'coach.got': '知道了',
     'coach.skip': '跳过',

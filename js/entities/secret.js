@@ -8,6 +8,7 @@
 import { rand, TAU } from '../core/config.js';
 import { camera } from '../core/state.js';
 import { WORLD } from '../systems/terrain.js';
+import { signals, depthLight, rimLight, rgba, LIGHT } from '../render/volume.js';
 
 export class Secret {
   constructor(id, kind, x, y, opts = {}) {
@@ -37,16 +38,24 @@ export class Secret {
 
   draw(ctx) {
     const p = (Math.sin(this.phase) + 1) * 0.5;
+
+    // 期三：接入共享深度协议。秘密是发光信标 ——
+    // 浅水 boost=1 与旧观感完全一致；越深越醒目（黑暗里的信标感）；
+    // 受光不对称朝向共享 LIGHT，但幅度随深度衰减（深海方向感消失，只剩信标本身）。
+    const dn = signals.depthNorm(this.x, this.y);
+    const L = depthLight(dn);
+    const boost = 1 + dn * 0.55;
+
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
 
     if (this.kind === 'shrine') {
       // 冥想点：柔和的直立光柱 + 基座环
-      const a = 0.18 + p * 0.16;
+      const a = (0.18 + p * 0.16) * boost;
       const g = ctx.createLinearGradient(this.x, this.y - 120, this.x, this.y + 20);
       g.addColorStop(0, 'rgba(200, 235, 255, 0)');
       g.addColorStop(0.6, `rgba(200, 235, 255, ${a})`);
-      g.addColorStop(1, `rgba(150, 210, 255, ${a * 1.4})`);
+      g.addColorStop(1, `rgba(150, 210, 255, ${Math.min(1, a * 1.4)})`);
       ctx.fillStyle = g;
       ctx.beginPath();
       ctx.moveTo(this.x - 16, this.y + 18);
@@ -56,29 +65,41 @@ export class Secret {
       ctx.closePath();
       ctx.fill();
 
-      ctx.strokeStyle = `rgba(190, 230, 255, ${0.35 + p * 0.3})`;
+      const rx = this.r * (1 + p * 0.08);
+      ctx.strokeStyle = rgba('190,230,255', Math.min(0.85, (0.35 + p * 0.3) * boost));
       ctx.lineWidth = 1.6;
       ctx.beginPath();
-      ctx.ellipse(this.x, this.y + 18, this.r * (1 + p * 0.08), this.r * 0.42, 0, 0, TAU);
+      ctx.ellipse(this.x, this.y + 18, rx, this.r * 0.42, 0, 0, TAU);
       ctx.stroke();
+
+      // 基座环朝光弧（左上）增亮 —— 与世界共享同一受光方向；
+      // 深海里方向光衰减（L.light），信标本身更亮（boost）
+      rimLight(ctx, this.x, this.y + 18, rx, '200,235,255', {
+        ry: 0.42, from: Math.PI * 1.02, to: Math.PI * 1.72,
+        alpha: Math.min(0.5, (0.18 + p * 0.2) * boost * L.light), width: 1.4,
+      });
     } else {
       // 贝壳：低调的柔光点 + 小扇形
-      const a = 0.2 + p * 0.25;
+      const a = (0.2 + p * 0.25) * boost;
       const g = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.r * 2.6);
-      g.addColorStop(0, `rgba(255, 240, 200, ${a})`);
+      g.addColorStop(0, `rgba(255, 240, 200, ${Math.min(1, a)})`);
       g.addColorStop(1, 'rgba(255, 220, 160, 0)');
       ctx.fillStyle = g;
       ctx.beginPath();
       ctx.arc(this.x, this.y, this.r * 2.6, 0, TAU);
       ctx.fill();
 
-      ctx.strokeStyle = `rgba(255, 235, 190, ${0.5 + p * 0.4})`;
       ctx.lineWidth = 1.4;
       for (let i = 0; i < 4; i++) {
         const ang = -Math.PI * 0.9 + (i / 3) * Math.PI * 0.8;
+        const dx = Math.cos(ang), dy = Math.sin(ang);
+        // 肋线朝光侧更亮：与 LIGHT 的点积决定受光系数（0.55 ~ 1.05），
+        // 幅度乘 L.light（深海方向感衰减）
+        const lit = Math.max(0.55, Math.min(1.05, 0.75 + (dx * LIGHT.x + dy * LIGHT.y) * 0.4 * L.light));
+        ctx.strokeStyle = rgba('255,235,190', Math.min(1, (0.5 + p * 0.4) * lit * (1 + dn * 0.3)));
         ctx.beginPath();
         ctx.moveTo(this.x, this.y + this.r * 0.5);
-        ctx.lineTo(this.x + Math.cos(ang) * this.r, this.y + Math.sin(ang) * this.r);
+        ctx.lineTo(this.x + dx * this.r, this.y + dy * this.r);
         ctx.stroke();
       }
     }

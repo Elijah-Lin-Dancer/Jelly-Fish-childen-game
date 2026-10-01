@@ -18,7 +18,9 @@ function markSeen() {
 export function createCoach() {
   let el = null;
   let step = 0;
-  const steps = ['coach.step1', 'coach.step2'];
+  // 步骤三（期三）：FAB 收纳引导 —— 玩法按钮收进了右下角泡泡钮，
+  // 不提示一句孩子会以为功能没了
+  const steps = ['coach.step1', 'coach.step2', 'coach.step3'];
 
   function ensure() {
     if (el) return el;
