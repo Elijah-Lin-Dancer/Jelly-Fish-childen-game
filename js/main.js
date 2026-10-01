@@ -25,7 +25,7 @@ import { createEcosystem } from './systems/ecosystem.js';
 import { createMode } from './systems/mode.js';
 import { createBuild } from './systems/build.js';
 import { createWorld, worldById } from './systems/worlds.js';
-import { createTerrain, WORLD, isTerrainType, terrainTypes, bandAt as bandOf, BANDS } from './systems/terrain.js';
+import { createTerrain, WORLD, isTerrainType, terrainTypes, bandAt as bandOf, depthNorm, BANDS } from './systems/terrain.js';
 import { createCamera } from './systems/camera.js';
 import { rareCompanionUnlocked } from './core/seed.js';
 import { Companion, COMPANION_VARIANTS } from './entities/companion.js';
@@ -55,6 +55,9 @@ import { Turtle } from './entities/turtle.js';
 import { Whale, setWhaleTerrain } from './entities/whale.js';
 import { Plankton, Bubble, Seaweed, Ripple, Bait, Celebrate } from './entities/env.js';
 import { createLife, pickLife } from './entities/life.js';
+// 期二：全游戏共享的光照 / 体积渲染协议。signals 是「地形采样口」，
+// 实体通过它拿到自己的归一化水深，从而与地形、水母处在同一套光下。
+import { signals } from './render/volume.js';
 
 // ---------- 画布 ----------
 const canvas = document.getElementById('ocean-canvas');
@@ -251,6 +254,41 @@ if (typeof window !== 'undefined') {
       const hit = pickLife(life, x, y);
       return hit ? hit.constructor.name : null;
     },
+    /** 期二：元素接入共享光照后的「受光运行态」快照（自动化验证用）。
+     *  depthNorm 是每个实体算受光的输入 —— 它必须是有限的、且随位置变化，
+     *  否则"元素和地形共享同一套光"就只是句口号。 */
+    get entities() {
+      return {
+        fish: schools.map((sc) => ({
+          n: sc.fish.length,
+          depths: sc.fish.map((f) => f.depthNorm),
+          alive: sc.fish.filter((f) => Number.isFinite(f.depthNorm)).length,
+        })),
+        turtles: turtles.map((t) => ({
+          x: t.x, y: t.y, size: t.size, depthNorm: t.depthNorm,
+        })),
+        whale: { x: whale.x, y: whale.y, size: whale.size, depthNorm: whale.depthNorm },
+        bigfish: {
+          x: ecosystem.bigFish.x, y: ecosystem.bigFish.y,
+          size: ecosystem.bigFish.size, depthNorm: ecosystem.bigFish.depthNorm,
+          mode: ecosystem.bigFish.mode,
+        },
+      };
+    },
+    /** 期二：signals 注入是否打通（实体拿到的水深 = 地形权威采样） */
+    signalProbe(x, y) {
+      return { depthAt: terrainRef.current.depthAt(x, y), depthNorm: depthNorm(terrainRef.current.depthAt(x, y)) };
+    },
+    /** 自动化测试用：把相机推一段距离（等价于玩家拖视角）。
+     *  __ocean.camera 是快照对象，改它没有意义 —— 必须走这个入口
+     *  去改真正的 camera 数据对象，测试才能验证"世界坐标 vs 屏幕坐标"。 */
+    nudgeCamera(dx, dy) {
+      camera.x += dx; camera.y += dy;
+      camera.tx = camera.x; camera.ty = camera.y;   // 同时挪缓动目标，避免被拉回去
+      return { x: camera.x, y: camera.y };
+    },
+    /** 自动化测试用：报告渲染循环是否在跑（headless 下 document.hidden 会暂停它） */
+    get running() { return running; },
     /** 切地形并回到该地形的家。11B 的「新建世界」面板会走同一条路径。 */
     setTerrain(type, seed) {
       setTerrain(type, seed);
@@ -1449,6 +1487,19 @@ window.addEventListener('blur', onKeyBlur);
 setTerrainProvider(terrain);
 // 鲸鱼是远洋生物，需要知道水深以避开浅滩/陆地（否则剪影会压在岛体上）
 setWhaleTerrain(terrain);
+// 【顺序修正】鲸鱼实例在文件更早处就已构造，那时地形还没注入 → 它的出生点
+// 完全没考虑水深，可能直接落在岛上（`_deepY` 因为没有 depthAtFn 而退化成
+// 纯随机）。地形就绪后必须让它重新选一次位置。
+whale.reset(true);
+// 换地形后地形整体重生（岛、岸线、深度场全变），鲸鱼的旧坐标必然是过期的。
+// 挂到重建钩子上，任何走 setTerrain 的路径都自动重新安顿它。
+terrainRebuildHooks.push(() => whale.reset(true));
+// 期二：把地形采样口交给渲染库。实体要「知道自己在水里多深」才能算受光，
+// 但它们不能反向 import main 的单例（循环依赖），所以走 signals 注入。
+signals.bind({
+  depthNorm: (x, y) => depthNorm(terrain.depthAt(x, y)),
+  isLand: (x, y) => terrain.isLand(x, y),
+});
 
 // ---------- 调度器 ----------
 const scheduler = createScheduler();

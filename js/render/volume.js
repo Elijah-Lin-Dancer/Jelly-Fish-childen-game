@@ -62,6 +62,96 @@ export function mixColor(a, b, t) {
     Math.round(A[2] + (B[2] - A[2]) * t);
 }
 
+/**
+ * hsl(h, s%, l%) -> 'R,G,B'
+ *
+ * 为什么需要它：实体（鱼 / 海龟 / 大鱼）的历史配色用的是 hsl 字符串，
+ * 而体积库全链路只认 'R,G,B' 三元组（要靠它做 shade / mix / 拆 alpha）。
+ * 与其在实体里手搓转换，不如把它收进库里 —— 这是「受光正确」的前置条件：
+ * 任何不能被 shade() 处理的颜色，都不可能跟着光源走。
+ *
+ * 注意返回的是**去 gamma 的直算值**（和浏览器 hsl 近似但不完全一致），
+ * 对渐变填充这种连续色调完全够用。
+ */
+export function hslTriple(h, s, l) {
+  const hh = ((h % 360) + 360) % 360 / 360;
+  const ss = Math.max(0, Math.min(1, s / 100));
+  const ll = Math.max(0, Math.min(1, l / 100));
+  if (ss <= 0.0001) {
+    const v = Math.round(ll * 255);
+    return v + ',' + v + ',' + v;
+  }
+  const q = ll < 0.5 ? ll * (1 + ss) : ll + ss - ll * ss;
+  const p = 2 * ll - q;
+  const ch = function (t) {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  return Math.round(ch(hh + 1 / 3) * 255) + ',' +
+    Math.round(ch(hh) * 255) + ',' +
+    Math.round(ch(hh - 1 / 3) * 255);
+}
+
+// ---------------------------------------------------------------------------
+// 【共享着色协议】浅水色相保留
+// ---------------------------------------------------------------------------
+// 水下体积感的标准做法是「越深越往水色偏」—— 见 sphereVolume 的 coldShift。
+// 但那是**水下元素**的规则。对「贴着水面 / 在岸上」的东西（大鱼、船、伞、
+// 棕榈），往水色偏会把它们染成一片蓝绿，与地形里"临水暖亮"的规则正好相反，
+// 看上去脏且失焦。
+//
+// 所以这里给出第二条规则，按**归一化深度**插值：
+//     d <= KEEP_BELOW   → 原色不动（受光只来自光源方向）
+//     d >= MIX_ABOVE    → 完全走水色偏移
+//     中间              → smoothstep 过渡
+// 这样"一条鱼从水面游到深渊"的过程里，颜色是连续变化的，不会某一帧突然变蓝。
+const COLD_KEEP_BELOW = 0.12;
+const COLD_MIX_ABOVE = 0.42;
+
+/**
+ * 按归一化深度算「水色侵染系数」0~1。
+ * @param {number} depthNorm 0=水面 1=最深（用 terrain.depthNorm 得到）
+ * @returns {number} 0 表示保留原色（浅水/岸上），1 表示完全按水下规则偏色
+ */
+export function coldFactor(depthNorm) {
+  const d = Math.max(0, Math.min(1, depthNorm || 0));
+  if (d <= COLD_KEEP_BELOW) return 0;
+  if (d >= COLD_MIX_ABOVE) return 1;
+  const u = (d - COLD_KEEP_BELOW) / (COLD_MIX_ABOVE - COLD_KEEP_BELOW);
+  return u * u * (3 - 2 * u);   // smoothstep
+}
+
+// ---------------------------------------------------------------------------
+// 【单例信号】水面 / 地形采样
+// ---------------------------------------------------------------------------
+// 实体需要知道"我在多深""这里有没有陆地"，但让每个实体反向 import main
+// 的单例会造成循环依赖。这里放一个**由 main 注入**的只读采样口，
+// 与 scenery 的 setTerrainProvider 是同一套做法。
+//
+//   signals.depthNorm(x, y) -> 0..1 归一化水深（陆地/水线以上返回 0）
+//   signals.isLand(x, y)    -> 布尔（用于把元素从水里剔出去）
+//
+// 未注入时（例如 Node 冒烟测试、或早期加载阶段）全部返回安全默认值。
+export const signals = {
+  _depthNorm: null,
+  _isLand: null,
+  /** main 在 setTerrain 之后调用一次；传 null 可解绑 */
+  bind(provider) {
+    this._depthNorm = provider && provider.depthNorm ? provider.depthNorm : null;
+    this._isLand = provider && provider.isLand ? provider.isLand : null;
+  },
+  depthNorm(x, y) {
+    return this._depthNorm ? Math.max(0, Math.min(1, this._depthNorm(x, y) || 0)) : 0;
+  },
+  isLand(x, y) {
+    return this._isLand ? !!this._isLand(x, y) : false;
+  },
+};
+
 function parseColor(c) {
   if (c.charAt(0) === '#') {
     const h = c.slice(1);
@@ -160,6 +250,7 @@ export function glow(ctx, x, y, r, tint, o) {
  *   o.alpha   整体不透明度（默认 1）
  *   o.light   额外受光强度 0~1（默认 1）
  *   o.flatTop / o.flatBot  顶部/底部压平（0~1）
+ *   o.keepHue true 时**不做**水色偏移（岸上 / 紧贴水面的东西用）
  *   o.cache,o.key  渐变缓存
  */
 export function sphereVolume(ctx, x, y, r, base, o) {
@@ -171,8 +262,9 @@ export function sphereVolume(ctx, x, y, r, base, o) {
   const lightAmt = o.light === undefined ? 1 : o.light;
   if (r <= 0.05) return;
 
-  // 深度冷色偏移：越深越靠蓝，这是水下体积感的"氛围层"
-  const body = depth > 0 ? mixColor(base, '#2a3f6e', depth * 0.45) : base;
+  // 深度冷色偏移：越深越靠蓝。浅水/岸上保持原色 —— 见 coldFactor 的说明。
+  const cold = o.keepHue ? 0 : (o.cold === undefined ? coldFactor(depth) : o.cold);
+  const body = cold > 0 ? mixColor(base, '#2a3f6e', cold * 0.45) : base;
 
   const prevA = ctx.globalAlpha;
   ctx.globalAlpha = prevA * alpha;
@@ -190,7 +282,7 @@ export function sphereVolume(ctx, x, y, r, base, o) {
     [0.45, rgba(m, 1)],
     [1, rgba(d, 1)]
   ];
-  const key = 'sv|' + Math.round(r) + '|' + Math.round(r * ry) + '|' + body + '|' + lightAmt.toFixed(2);
+  const key = 'sv|' + Math.round(r) + '|' + Math.round(r * ry) + '|' + body + '|' + lightAmt.toFixed(2) + '|' + cold.toFixed(2);
   const grad = radial(ctx, o.cache, key, lx, ly, r * 0.05, r * 1.02, stops);
 
   ctx.beginPath();
@@ -243,7 +335,9 @@ export function capsuleVolume(ctx, x0, y0, x1, y1, r0, r1, base, o) {
   const depth = o.depth || 0;
   const alpha = o.alpha === undefined ? 1 : o.alpha;
   const lightAmt = o.light === undefined ? 1 : o.light;
-  const body = depth > 0 ? mixColor(base, '#2a3f6e', depth * 0.45) : base;
+  // 同 sphereVolume：浅水/岸上保留原色
+  const cold = o.keepHue ? 0 : (o.cold === undefined ? coldFactor(depth) : o.cold);
+  const body = cold > 0 ? mixColor(base, '#2a3f6e', cold * 0.45) : base;
   if (r0 <= 0.05 && r1 <= 0.05) return;
 
   const prevA = ctx.globalAlpha;
@@ -261,7 +355,7 @@ export function capsuleVolume(ctx, x0, y0, x1, y1, r0, r1, base, o) {
   const shadow = shade(body, -0.34 - depth * 0.2);
   const lite = shade(body, 0.3 * lightAmt);
   const stops = [[0, rgba(lite, 1)], [0.45, rgba(body, 1)], [1, rgba(shadow, 1)]];
-  const key = 'cv|' + Math.round(len) + '|' + Math.round(mid) + '|' + body + '|' + lightAmt.toFixed(2);
+  const key = 'cv|' + Math.round(len) + '|' + Math.round(mid) + '|' + body + '|' + lightAmt.toFixed(2) + '|' + cold.toFixed(2);
   const gcx = cx + LIGHT.x * mid * 0.5, gcy = cy + LIGHT.y * mid * 0.5;
   const grad = radial(ctx, o.cache, key, gcx, gcy, mid * 0.2, mid * 1.25, stops);
 
@@ -322,7 +416,8 @@ export function organicVolume(ctx, x, y, r, base, o) {
   const topK = o.flatten === undefined ? 1.3 : o.flatten;
   if (r <= 0.05) return;
 
-  const body = depth > 0 ? mixColor(base, '#2a3f6e', depth * 0.4) : base;
+  const cold = o.keepHue ? 0 : (o.cold === undefined ? coldFactor(depth) : o.cold);
+  const body = cold > 0 ? mixColor(base, '#2a3f6e', cold * 0.4) : base;
   const prevA = ctx.globalAlpha;
   ctx.globalAlpha = prevA * alpha;
   ctx.save();
@@ -349,7 +444,7 @@ export function organicVolume(ctx, x, y, r, base, o) {
       [0.55, rgba(body, 0.6)],
       [1, rgba(shade(body, -0.28), 0.27)]
     ];
-    const key = 'ov|' + Math.round(r) + '|' + body + '|' + lightAmt.toFixed(2);
+    const key = 'ov|' + Math.round(r) + '|' + body + '|' + lightAmt.toFixed(2) + '|' + cold.toFixed(2);
     const grad = radial(ctx, o.cache, key, lx, ly, 0, r, stops);
     buildPath();
     ctx.fillStyle = grad;
@@ -400,7 +495,23 @@ export function specular(ctx, x, y, hw, hh, o) {
 
 /**
  * 上缘亮环（物体被上方光"扫到边"的那圈亮边）。
- * @param {object} [o] { from=1.15, to=1.85, color, alpha=0.33, width=1.5, cy=-0.35 }
+ *
+ * @param {number} r 半径基准
+ * @param {object} [o]
+ *   o.from=1.15π, o.to=1.85π  弧的起止角
+ *   o.alpha=0.33              强度
+ *   o.width=1.5               线宽
+ *   o.cy=-0.35                弧心相对 y 的偏移（按 r 归一）
+ *   o.rk=0.92                 横向半径 = r * rk
+ *   o.ryk                     纵向半径 = r * rk * ryk（等比压扁，龟甲用）
+ *   o.ry                      纵向半径 = r * ry（**独立**压扁，长扁身体用）
+ *
+ * ⚠ o.ry / o.ryk 是给压扁物体用的。最初这里只会画正圆，导致压扁的
+ *   龟壳/鱼身上出现一圈飘在体外上方的亮弧（实测截图里海龟、大鱼、
+ *   小鱼头顶都有游离弧线）。两类压扁要区分：
+ *     · 龟甲是"圆等比压扁"（rx≈ry*1.6）→ 传 ryk 即可；
+ *     · 鱼/鲸是"长而扁"（rx≈2*ry）→ 必须传独立的 ry，
+ *       用 ryk 会让纵向半径跟着横向一起放大，弧照样飘出去。
  */
 export function rimLight(ctx, x, y, r, tint, o) {
   o = o || {};
@@ -408,12 +519,22 @@ export function rimLight(ctx, x, y, r, tint, o) {
   const to = o.to === undefined ? Math.PI * 1.85 : o.to;
   const a = o.alpha === undefined ? 0.33 : o.alpha;
   if (a <= 0.01) return;
+  const rk = o.rk === undefined ? 0.92 : o.rk;
+  const ryk = o.ryk === undefined ? 1 : o.ryk;
+  const rx = r * rk;
+  const ry = o.ry !== undefined ? r * o.ry : r * rk * ryk;
+  const cy = o.cy === undefined ? -0.35 : o.cy;
   const prev = ctx.globalCompositeOperation;
   ctx.save();
   ctx.strokeStyle = rgba(tint, a);
   ctx.lineWidth = o.width === undefined ? 1.5 : o.width;
   ctx.beginPath();
-  ctx.arc(x, y + r * (o.cy === undefined ? -0.35 : o.cy), r * (o.rk === undefined ? 0.92 : o.rk), from, to);
+  if (Math.abs(rx - ry) < 0.5) {
+    ctx.arc(x, y + r * cy, rx, from, to);
+  } else {
+    // 椭圆弧：圆心按纵向压缩一起移动，否则弧会跑到物体外面
+    ctx.ellipse(x, y + r * cy, rx, ry, 0, from, to);
+  }
   ctx.stroke();
   ctx.restore();
   ctx.globalCompositeOperation = prev;
@@ -435,8 +556,9 @@ export function earthVolume(ctx, x0, y0, x1, y1, w, base, o) {
   o = o || {};
   const depth = o.depth || 0;
   const alpha = o.alpha === undefined ? 1 : o.alpha;
-  const body = depth > 0 ? mixColor(base, '#16233f', depth * 0.4) : base;
-  const top = o.top ? mixColor(o.top, '#2a3f6e', depth * 0.35) : shade(body, 0.22);
+  const cold = o.keepHue ? 0 : (o.cold === undefined ? coldFactor(depth) : o.cold);
+  const body = cold > 0 ? mixColor(base, '#16233f', cold * 0.4) : base;
+  const top = o.top ? mixColor(o.top, '#2a3f6e', cold * 0.35) : shade(body, 0.22);
 
   const prevA = ctx.globalAlpha;
   ctx.globalAlpha = prevA * alpha;
@@ -464,6 +586,16 @@ export function earthVolume(ctx, x0, y0, x1, y1, w, base, o) {
 
 /**
  * 统一的深度感受光参数。所有实体都应该用它算光照，保证同一个世界同一套光。
+ *
+ * 配合 signals.depthNorm() 的标准写法（实体里就这么抄）：
+ *
+ *     const dn = signals.depthNorm(this.x, this.y);
+ *     const L  = depthLight(dn);
+ *     sphereVolume(ctx, 0, 0, r, base, { light: L.light, depth: dn });
+ *
+ * 传进去的 depth 由 volume 内部的 coldFactor 决定"该不该偏水色"，
+ * 所以浅水的鱼和深海的鱼用的是同一行代码，颜色却各自正确。
+ *
  * @param {number} depthNorm 0（水面）~ 1（最深）
  * @returns {{light:number, depth:number, tintMix:number}}
  */
