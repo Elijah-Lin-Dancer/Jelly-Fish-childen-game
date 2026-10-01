@@ -10,6 +10,8 @@
 //    update(dt,t)   -> void|false
 //    draw(ctx,t)    -> void
 //    entities  : Array             池化实体，倒序遍历，update 返回 false 即回收
+//    noDraw    : true              实体仍更新/回收，但绘制让给别的层
+//                                  （深度分层：中景实体按 z-lane 在 swim 带里排序画）
 //    reconcile(dt,t) -> void        实体增删
 // ============================================================
 
@@ -33,8 +35,8 @@ export function createScheduler() {
         // 2) 实体增删
         if (sys.reconcile) sys.reconcile(dt, t);
 
-        // 3) 绘制：按 space 决定要不要套相机变换
-        const world = sys.space === 'world' && camera;
+        // 3) 绘制：按 space 决定要不要套相机变换（noDraw 的层只更新不画）
+        const world = sys.space === 'world' && camera && !sys.noDraw;
         if (world) {
           ctx.save();
           ctx.translate(-camera.x, -camera.y);
@@ -48,7 +50,7 @@ export function createScheduler() {
             // Seaweed 之类没有 update，视为常驻
             const alive = e.update ? e.update(dt, t) : true;
             if (alive === false) { arr.splice(i, 1); continue; }
-            if (e.draw) e.draw(ctx, t);
+            if (!sys.noDraw && e.draw) e.draw(ctx, t);
           }
         } else if (sys.draw) {
           sys.draw(ctx, t);

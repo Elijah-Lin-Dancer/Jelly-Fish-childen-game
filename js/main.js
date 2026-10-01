@@ -279,6 +279,18 @@ if (typeof window !== 'undefined') {
     signalProbe(x, y) {
       return { depthAt: terrainRef.current.depthAt(x, y), depthNorm: depthNorm(terrainRef.current.depthAt(x, y)) };
     },
+    /** 期三·深度分层：泳层带 z-lane 快照（自动化验证用）。
+     *  绘制过至少一帧后，所有中景实体都应有 ∈ [-1, 1] 的稳定 lane。 */
+    get swimZ() {
+      const f = (z) => (z == null ? null : +z.toFixed(2));
+      return {
+        seaweed: seaweeds.map((w) => f(w.z)),
+        schools: schools.map((sc) => f(sc.z)),
+        turtles: turtles.map((t) => f(t.z)),
+        jellyfish: jellyfish.map((j) => f(j.z)),
+        bigfish: f(ecosystem.bigFish.z),
+      };
+    },
     /** 自动化测试用：把相机推一段距离（等价于玩家拖视角）。
      *  __ocean.camera 是快照对象，改它没有意义 —— 必须走这个入口
      *  去改真正的 camera 数据对象，测试才能验证"世界坐标 vs 屏幕坐标"。 */
@@ -1569,7 +1581,8 @@ scheduler.add({
   },
 });
 scheduler.add({
-  id: 'seaweed', space: 'world', order: 3,
+  // 深度分层：海草的绘制让给 swim 泳层带（水母能游进草丛后面了）
+  id: 'seaweed', space: 'world', order: 3, noDraw: true,
   entities: seaweeds,
 });
 scheduler.add({
@@ -1577,7 +1590,8 @@ scheduler.add({
   entities: plankton,
 });
 scheduler.add({
-  id: 'fish', space: 'world', order: 5,
+  // 深度分层：鱼群绘制让给 swim 泳层带
+  id: 'fish', space: 'world', order: 5, noDraw: true,
   update: () => {
     for (const sc of schools) {
       const b = feeding.nearest(sc.cx, sc.cy);
@@ -1589,10 +1603,10 @@ scheduler.add({
       }
     }
   },
-  draw: (c) => { for (const sc of schools) sc.draw(c); },
 });
 scheduler.add({
-  id: 'turtle', space: 'world', order: 6,
+  // 深度分层：海龟绘制让给 swim 泳层带
+  id: 'turtle', space: 'world', order: 6, noDraw: true,
   entities: turtles,
 });
 scheduler.add(createDepthHaze());
@@ -1639,12 +1653,35 @@ scheduler.add({
       }
     }
   },
+  // 深度分层：水母绘制让给 swim 泳层带（发光密度计数也一并移过去）
+});
+
+// ---------- 深度分层（期三）：中景泳层合并，按 z-lane 排序绘制 ----------
+// 此前各类型固定层序：海草(3) < 鱼群(5) < 海龟(6) < 水母(7) < 大鱼(12)，
+// 类型序永远压过位置关系 —— 水母不可能游到海草后面，鱼群永远钻不到水母前面。
+// 现在把中景实体合并进一个泳层带：每只实体一个稳定的 z-lane（-1 远 .. 1 近），
+// 首次绘制时惰性赋值、终生不变（无跳变），按 lane 从远到近排序 ——
+// 鱼群会从水母身前游过，水母会摆尾钻进海草后面，伪 3D 穿插感就出来了。
+// 不参与泳层带：鲸（远景 order 1）、气泡/波纹/饵料（前景反馈层）、
+// Bogyó / 伙伴 / 目标环（近景陪伴层）、建造构件（功能可读性优先，维持原层）。
+scheduler.add({
+  id: 'swim', space: 'world', order: 6,
   draw: (c) => {
-    // 供 Jellyfish 做发光密度自适应
+    const band = [];
+    const zOf = (e) => e.z ?? (e.z = rand(-1, 1));
+    for (const w of seaweeds) band.push({ z: zOf(w), d: () => w.draw(c) });
+    for (const sc of schools) band.push({ z: zOf(sc), d: () => sc.draw(c) });
+    for (const t of turtles) band.push({ z: zOf(t), d: () => t.draw(c) });
+    // 供 Jellyfish 做发光密度自适应（原在水母条目的 draw 里）
     Jellyfish.__count = jellyfish.length;
-    for (const j of jellyfish) j.draw(c);
+    for (const j of jellyfish) band.push({ z: zOf(j), d: () => j.draw(c) });
+    const bf = ecosystem.bigFish;
+    band.push({ z: zOf(bf), d: () => ecosystem.draw(c) });   // 显隐/安全模式判断在 ecosystem.draw 内部
+    band.sort((a, b) => a.z - b.z);
+    for (const it of band) it.d();
   },
 });
+
 scheduler.add({
   id: 'bait', space: 'world', order: 8,
   entities: baits,
@@ -1676,9 +1713,9 @@ scheduler.add({
   draw: (c) => current.draw(c),
 });
 scheduler.add({
+  // 深度分层：大鱼绘制让给 swim 泳层带（大鱼显隐逻辑仍在 eco.draw 内部）
   id: 'ecosystem', space: 'world', order: 12,
   update: () => ecosystem.update(dtGlobal, tGlobal),
-  draw: (c) => ecosystem.draw(c),
 });
 
 // ---------- 阶段六：繁育检测 ----------
