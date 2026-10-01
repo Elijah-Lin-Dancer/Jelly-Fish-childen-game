@@ -377,3 +377,50 @@ TLS 中断（`GnuTLS recv error -110`），换 `140.82.121.3` 后恢复。
 - [Minecraft Wiki · World seed](https://minecraft.wiki/w/World_seeds)（任意字符串→32bit 种子、可复现可分享）
 - [Minecraft Wiki · Ocean / Beach / Stony Shore](https://minecraft.wiki/w/Ocean)（水陆交界、沙岸/石岸形态）
 - [Minecraft Wiki · Mushroom Fields](https://minecraft.wiki/w/Mushroom_Fields)（罕见孤立群系、无掠食者）
+
+---
+
+## 上线后回填（三）：竖屏纵向锁死 + 手机虚拟摇杆
+
+用户报告「电脑端 W/A/S/D 和方向键都无法移动场景」。诊断链路：
+`keydown` → `heldKeys` → `refreshKeyAxis` → `camInput`（state 单例）
+→ `loop` 每帧 `cam.update(dt)` 读它推进 `tx/ty`。逻辑完整。
+
+**实测结论（无头 Chromium 真实引擎，指向本地与线上同一份代码）：**
+
+| 视口 | 横向 | 纵向↓(S) | 纵向↑(W/↑) | 初始相机 ty |
+| --- | --- | --- | --- | --- |
+| 1280×720 | ✅ | ✅ | ✅ | −284（有上方余量） |
+| 1000×1000 | ✅ | ✅ | ✅ | 正常 |
+| 900×1200 | ✅ | ✅ | ❌ 锁死 | **−1100 = minY（贴顶）** |
+| 414×896 | ✅ | ✅ | ❌ 锁死 | **−1100 = minY** |
+
+- **横屏四向全动**，代码无 bug。用户「标准横屏全屏完全不动」与实测冲突，
+  归环境（中文输入法激活吞字母键、页面/标签页未聚焦、或 Pages 缓存旧 JS）。
+- **竖屏/近方视口（h/w ≥ ~1.2）：纵向↑被边界钉死** —— 这是真实 bug，
+  对手机竖屏是致命的（手机本就没有键盘）。
+
+**根因**：`goHome`（`main.js`）把期望相机**中心** `cy` 直接 `clamp` 到
+`[minY, maxY]`；但 `camera.bounds` 的 `minY/maxY` 是相机**左上角 `ty`** 的范围，
+与中心差半个视口高 `vh/2`。竖屏 `vh` 大时 `cy` 被压到 `maxY`，
+经 `centerOn(ty = cy - vh/2)` 换算后 `ty` 溢出 `minY` 被夹回最上界 ——
+相机初始贴 Y 上界，向上零余量；只有向下/左右能动。
+`coach.js` 只处理 `Escape`，不是吞键元凶（W 不动是边界 clamp，非事件未达）。
+
+**修法**：`cy` 改 clamp 到**中心范围** `[minY + vh/2, maxY + vh/2]`。
+竖屏初始 `ty` 由 −1100 → −588（居中），上/下都留余量，W/↑ 走通；
+横屏 `cy` 本就在范围内，行为不变。
+
+**手机虚拟摇杆（仿 Minecraft 左摇杆）**：`js/ui/touchPad.js`，
+左下角固定 thumbstick，pointer 拖动向量写入新 state `touchAxis`；
+`camera.update` 每帧把 `camInput`（键盘）+ `touchAxis` 合成（并存、互不覆盖）。
+方向语义与键盘一致（上推 = 负 y = 相机向上）。仅在
+`isMobile || matchMedia('(pointer: coarse)')` 时构建 DOM，桌面鼠标无开销。
+
+**键盘健壮性防御**：`home.enter()` 进入游戏时 `document.activeElement.blur()`，
+防止创建面板的种子/名字输入框焦点残留导致 `onKeyDown` 的 `isTypingTarget`
+把全部键吞掉（表现为「进游戏后键盘全失灵」）。
+
+**线上验证**（真实 URL，无头）：横屏四向动；竖屏 `ArrowUp` 首键 `ty −604 → −433`
+（向上可动）；触屏 context 摇杆 DOM 存在且 `.show`，上推 `ty−360`、右推 `tx+360`
+均有效；桌面无摇杆 DOM；0 pageerror。关键文件与线上 sha256 全部一致。
