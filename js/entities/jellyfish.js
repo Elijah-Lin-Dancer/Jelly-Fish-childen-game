@@ -7,6 +7,10 @@ import { rand, TAU, damp, clamp } from '../core/config.js';
 import { pointer, view, theme, dayNight, camera, screenToWorld, screenRadius } from '../core/state.js';
 import { WORLD } from '../systems/terrain.js';
 import { randomTraits, normalizeTraits } from '../gameplay/genes.js';
+import {
+  glow, organicVolume, specular, rimLight, depthLight,
+  signals, makeCache, rgba, shade, LIGHT,
+} from '../render/volume.js';
 
 /** 六种配色（name 供图鉴使用） */
 export const JELLY_PALETTES = [
@@ -17,6 +21,14 @@ export const JELLY_PALETTES = [
   { key: 'violet', core: '#d9b3ff', glow: '#a64dff', tent: '#e6ccff' },
   { key: 'yellow', core: '#fff0a8', glow: '#ffd84d', tent: '#fff5c2' },
 ];
+
+/** '#rrggbb' -> 'R,G,B' 三元组（volume 库只认这种格式，方便 shade/mix/拆 alpha） */
+function hexToTriple(hex) {
+  const h = hex.charAt(0) === '#' ? hex.slice(1) : hex;
+  return parseInt(h.slice(0, 2), 16) + ',' +
+         parseInt(h.slice(2, 4), 16) + ',' +
+         parseInt(h.slice(4, 6), 16);
+}
 
 /**
  * 按权重随机选一个调色板下标（阶段十：群系专属物种刷新）。
@@ -65,7 +77,7 @@ export class Jellyfish {
     this.x = x ?? rand(vx0, vx0 + camera.vw);
     this.y = y ?? rand(vy0, vy0 + camera.vh);
     this.paletteIndex = paletteIndex ?? ((Math.random() * JELLY_PALETTES.length) | 0);
-    this.palette = JELLY_PALETTES[this.paletteIndex];
+    this._setPalette(this.paletteIndex);
 
     const juvenile = opts.juvenile === true;
     // 阶段十一：世界坐标下相机缩放自动处理「小屏显得太大」的问题，
@@ -115,9 +127,8 @@ export class Jellyfish {
     this.attract = 0;
     this.pulse = 0;
 
-    // 复用的渐变缓存（避免每帧 new）
-    this._glowGrad = null;
-    this._glowKey = '';
+    // 复用的渐变缓存（volume 库按 size+color+intensity 缓存，避免每帧 new）
+    this._cache = makeCache();
 
     // 闪光（被互动/变异时）
     this.flash = 0;
@@ -149,8 +160,18 @@ export class Jellyfish {
         { len: rand(this.r * 1.2, this.r * 2.6), phase: rand(0, TAU), freq: rand(0.02, 0.05), amp: rand(4, 12), width: rand(1.2, 2.6) }
       );
     }
-    this._glowGrad = null;
-    this._glowKey = '';
+    this._cache = makeCache();
+  }
+
+  /** 切换配色：刷新 RGB 三元组与渐变缓存（color 变了旧缓存全部作废） */
+  _setPalette(idx) {
+    this.paletteIndex = idx;
+    const p = JELLY_PALETTES[idx];
+    this.palette = p;
+    this.coreRgb = hexToTriple(p.core);
+    this.glowRgb = hexToTriple(p.glow);
+    this.tentRgb = hexToTriple(p.tent);
+    if (this._cache) this._cache.clear();
   }
 
   _buildTentacles() {
@@ -182,13 +203,11 @@ export class Jellyfish {
           }
           return idx;
         })();
-    this.paletteIndex = next;
-    this.palette = JELLY_PALETTES[next];
+    this._setPalette(next);
     this.tentacles.push(
       { len: rand(this.r * 1.2, this.r * 2.6), phase: rand(0, TAU), freq: rand(0.02, 0.05), amp: rand(4, 12), width: rand(1.2, 2.6) },
       { len: rand(this.r * 1.2, this.r * 2.6), phase: rand(0, TAU), freq: rand(0.02, 0.05), amp: rand(4, 12), width: rand(1.2, 2.6) }
     );
-    this._glowGrad = null;
     this.flash = 1;
     return true;
   }
@@ -320,7 +339,6 @@ export class Jellyfish {
   draw(ctx) {
     const pulse = this.pulse;
     const r = this.baseR * this.scale * (0.85 + pulse * 0.25);
-    const p = this.palette;
     const th = theme.current;
     const nightGlow = 1 + (1 - dayNight.sun) * 1.2;
     // 密度自适应：水母越多，单个外发光越收敛，避免叠加死白
@@ -329,8 +347,16 @@ export class Jellyfish {
     const glowGene = 0.6 + (this.traits ? this.traits.glow : 0.5) * 0.9;
     // 休眠个体整体变暗（缺氧提示）
     const dorm = this.dormant ? 0.45 : 1;
-    const boost = (th.glowBoost * nightGlow + this.flash * 0.8 + this.feedFlash * 0.4) * (0.6 + crowd * 0.4) * glowGene * dorm;
-    // 杂交个体：柔和的青蓝附加光晕，作为"混血"标识
+    const crowdMult = (0.6 + crowd * 0.4) * glowGene * dorm;
+    const baseBoost = th.glowBoost * nightGlow * crowdMult;
+    const flashTerm = (this.flash * 0.8 + this.feedFlash * 0.4) * crowdMult;
+    const boost = baseBoost + flashTerm;
+
+    // 共享深度协议：与鱼/龟/鲸/大鱼/岸元素同一套光照
+    const dn = signals.depthNorm(this.x, this.y);
+    const L = depthLight(dn);
+
+    // 杂交个体：柔和的青蓝附加光晕（玩法标识，与光照无关，保留）
     if (this.hybrid) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
@@ -345,33 +371,34 @@ export class Jellyfish {
     ctx.save();
     ctx.translate(this.x, this.y);
 
-    // 外发光（渐变按尺寸缓存，尺寸变了才重建）
-    const glowR = r * (th.glowScale + pulse * 0.8);
-    const key = Math.round(glowR) + '|' + p.glow + '|' + boost.toFixed(2);
-    if (this._glowKey !== key) {
-      const g = ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, glowR);
-      const a1 = Math.min(160, Math.round(0x88 * boost)).toString(16).padStart(2, '0');
-      const a2 = Math.min(90, Math.round(0x44 * boost)).toString(16).padStart(2, '0');
-      g.addColorStop(0, p.glow + a1);
-      g.addColorStop(0.4, p.glow + a2);
-      g.addColorStop(1, p.glow + '00');
-      this._glowGrad = g;
-      this._glowKey = key;
-    }
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = this._glowGrad;
-    ctx.beginPath();
-    ctx.arc(0, 0, glowR, 0, TAU);
-    ctx.fill();
-    ctx.globalCompositeOperation = 'source-over';
+    // 1) 外发光 —— 共享 glow()
+    glow(ctx, 0, 0, r, this.glowRgb, {
+      glow: boost,
+      scale: (th.glowScale + pulse * 0.8) / Math.max(0.1, 0.7 + boost * 0.45),
+      cache: this._cache,
+    });
 
-    // 触须
+    // 2) 触须 —— 沿 LIGHT 方向的渐变（之前是平涂，没有受光差别）
     ctx.lineCap = 'round';
+    const tgKey = 'tg|' + Math.round(r) + '|' + this.tentRgb + '|' + baseBoost.toFixed(2);
+    let tentGrad = this._cache.get(tgKey);
+    if (!tentGrad) {
+      tentGrad = ctx.createLinearGradient(
+        LIGHT.x * r * 0.9, LIGHT.y * r * 0.9,
+        -LIGHT.x * r * 0.9, -LIGHT.y * r * 0.9
+      );
+      tentGrad.addColorStop(0, rgba(shade(this.tentRgb, Math.min(0.55, 0.4 * baseBoost)), 0.85));
+      tentGrad.addColorStop(1, rgba(shade(this.tentRgb, -0.35), 0.5));
+      if (this._cache.size > 120) this._cache.clear();
+      this._cache.set(tgKey, tentGrad);
+    }
     const nT = this.tentacles.length;
     for (let i = 0; i < nT; i++) {
       const t2 = this.tentacles[i];
       const baseX = (i / Math.max(1, nT - 1) - 0.5) * r * 1.4;
       const segs = 14;
+      ctx.strokeStyle = tentGrad;
+      ctx.lineWidth = t2.width * (1 - pulse * 0.3);
       ctx.beginPath();
       ctx.moveTo(baseX, r * 0.3);
       for (let s = 1; s <= segs; s++) {
@@ -381,73 +408,38 @@ export class Jellyfish {
         const ty = r * 0.3 + t2.len * f * this.scale;
         ctx.lineTo(tx, ty);
       }
-      ctx.strokeStyle = p.tent + (i % 2 === 0 ? 'cc' : '88');
-      ctx.lineWidth = t2.width * (1 - pulse * 0.3);
       ctx.stroke();
     }
 
-    // 伞盖（半透明，但保持足够色彩浓度以区分六色）
-    const bodyG = ctx.createRadialGradient(0, -r * 0.2, 0, 0, 0, r);
-    bodyG.addColorStop(0, p.core + 'ee');
-    bodyG.addColorStop(0.55, p.core + '99');
-    bodyG.addColorStop(1, p.glow + '44');
-    ctx.fillStyle = bodyG;
-    ctx.beginPath();
-    ctx.moveTo(-r, 0);
-    ctx.bezierCurveTo(-r, -r * 1.3, r, -r * 1.3, r, 0);
-    const waveCount = 5;
-    for (let i = 0; i <= waveCount; i++) {
-      const f = i / waveCount;
-      const x = r - f * r * 2;
-      const y = r * 0.15 + Math.sin(f * Math.PI + this.phase * 2) * r * 0.12 * (0.5 + pulse * 0.8);
-      ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.fill();
+    // 3) 伞盖 —— organicVolume（带体积的软体，受光方向与 LIGHT 对齐）
+    organicVolume(ctx, 0, 0, r, this.coreRgb, {
+      waves: 5,
+      waveAmp: 0.12,
+      phase: this.phase * 2,
+      depth: dn,
+      light: L.light,
+      cache: this._cache,
+    });
 
-    // 色相强化层：用 lighter 叠一层本色，抵消暗背景对色彩的稀释
-    ctx.globalCompositeOperation = 'lighter';
-    const hueG = ctx.createRadialGradient(0, -r * 0.15, 0, 0, 0, r * 1.02);
-    hueG.addColorStop(0, p.core + '3a');
-    hueG.addColorStop(0.7, p.glow + '24');
-    hueG.addColorStop(1, p.glow + '00');
-    ctx.fillStyle = hueG;
-    ctx.beginPath();
-    ctx.moveTo(-r, 0);
-    ctx.bezierCurveTo(-r, -r * 1.3, r, -r * 1.3, r, 0);
-    for (let i = 0; i <= waveCount; i++) {
-      const f = i / waveCount;
-      const x = r - f * r * 2;
-      const y = r * 0.15 + Math.sin(f * Math.PI + this.phase * 2) * r * 0.12 * (0.5 + pulse * 0.8);
-      ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.globalCompositeOperation = 'source-over';
+    // 4) 顶部高光 —— 共享 specular
+    specular(ctx, -r * 0.25, -r * 0.5, r * 0.35, r * 0.18, { rot: -0.3, alpha: 0.32 });
 
-    // 伞盖高光
-    ctx.fillStyle = 'rgba(255,255,255,0.32)';
-    ctx.beginPath();
-    ctx.ellipse(-r * 0.25, -r * 0.5, r * 0.35, r * 0.18, -0.3, 0, TAU);
-    ctx.fill();
+    // 5) 边缘亮环（沿 LIGHT 方向的顶缘）—— 共享 rimLight
+    rimLight(ctx, 0, 0, r, this.coreRgb, {
+      from: Math.PI * 1.15, to: Math.PI * 1.85,
+      cy: -0.35, rk: 0.92, width: 1.5, alpha: 0.33,
+    });
 
-    // 边缘亮环
-    ctx.strokeStyle = p.core + '55';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(0, -r * 0.35, r * 0.92, Math.PI * 1.15, Math.PI * 1.85);
-    ctx.stroke();
-
-    // 吸引光环
+    // 6) 吸引光环（玩法提示，与光照无关，保留）
     if (this.attract > 0.1) {
-      ctx.strokeStyle = p.core + Math.floor(Math.min(1, this.attract) * 180).toString(16).padStart(2, '0');
+      ctx.strokeStyle = 'rgba(' + this.coreRgb + ',' + (Math.min(1, this.attract) * 180 / 255) + ')';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(0, 0, r * 1.5, 0, TAU);
       ctx.stroke();
     }
 
-    // 每日稀有客：金色缓旋光环 + 星点
+    // 7) 每日稀有客：金色光环 + 星点（保留）
     if (this.rare) {
       ctx.globalCompositeOperation = 'lighter';
       const spin = this.age * 0.001;
