@@ -16,6 +16,30 @@
 import { TAU, rand, clamp } from '../core/config.js';
 import { WORLD } from '../systems/terrain.js';
 import { makeRng, rangeFrom } from '../core/seed.js';
+// 期二：岸上元素接入共享光照协议。它们 depthNorm=0（不受水色侵染），
+// 需要的是**与地形/水母同一方向的光**：左上受光、右下背光。
+// LIGHT 给方向，shade 给明暗两档色。
+import { shade, rgba, specular } from '../render/volume.js';
+
+/**
+ * 方向性明暗叠加：沿全局光方向铺一层"左上亮 / 右下暗"的渐变。
+ * 岸上元素（灯塔塔身、船体、伞面）都是平涂色块，叠这一层就有了体积，
+ * 且所有元素的光照方向自动与地形一致 —— 这是本文件接入共享协议的方式。
+ *
+ * 调用方通常先 clip 到自己的形体再调它（渐变只落在形体内部）。
+ * @param {number} x0,y0,x1,y1 渐变线段（一般取形体包围盒沿 LIGHT 方向的对角）
+ * @param {number} k    强度 0~1（0.2 左右是"有体积但不脏"的常用值）
+ */
+function dirLight(ctx, x0, y0, x1, y1, k = 0.22) {
+  if (k <= 0.01) return;
+  const g = ctx.createLinearGradient(x0, y0, x1, y1);
+  g.addColorStop(0, 'rgba(255, 250, 235, ' + (0.3 * k).toFixed(3) + ')');
+  g.addColorStop(0.45, 'rgba(255, 250, 235, 0)');
+  g.addColorStop(0.62, 'rgba(12, 26, 46, 0)');
+  g.addColorStop(1, 'rgba(12, 26, 46, ' + (0.4 * k).toFixed(3) + ')');
+  ctx.fillStyle = g;
+  ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+}
 
 // ---------- 通用：一次性互动动画的计时器 ----------
 // 点一下播一段，播完自己归零。所有元素共用，逻辑只有一处。
@@ -90,6 +114,8 @@ export class Swimmer {
     ctx.beginPath();
     ctx.arc(0, -s * 0.05, s * 0.34, Math.PI, TAU);
     ctx.fill();
+    // 【期二】头顶湿反光：与全局光同向的一粒高光
+    specular(ctx, -s * 0.1, -s * 0.16, s * 0.09, s * 0.05, { alpha: 0.5, rot: -0.5 });
 
     // 划水的手臂
     ctx.strokeStyle = 'rgba(244, 214, 186, 0.9)';
@@ -182,6 +208,8 @@ export class PlayingChild {
     ctx.beginPath();
     ctx.arc(0, 0, s * 0.36, 0, TAU);
     ctx.fill();
+    // 【期二】头顶湿反光（与全局光同向）
+    specular(ctx, -s * 0.11, -s * 0.15, s * 0.09, s * 0.05, { alpha: 0.5, rot: -0.5 });
     // 两只小辫子
     ctx.fillStyle = 'hsl(' + ((this.hue + 40) % 360) + ', 60%, 52%)';
     ctx.beginPath();
@@ -306,15 +334,23 @@ export class Boat {
       }
     }
 
-    // 船体
+    // 船体。【期二】平涂 + clip 后的方向性明暗：左舷受光、右舷沉
+    const hull = function () {
+      ctx.beginPath();
+      ctx.moveTo(-s, -s * 0.12);
+      ctx.lineTo(s, -s * 0.12);
+      ctx.lineTo(s * 0.66, s * 0.5);
+      ctx.lineTo(-s * 0.66, s * 0.5);
+      ctx.closePath();
+    };
     ctx.fillStyle = 'rgba(122, 86, 62, 0.94)';
-    ctx.beginPath();
-    ctx.moveTo(-s, -s * 0.12);
-    ctx.lineTo(s, -s * 0.12);
-    ctx.lineTo(s * 0.66, s * 0.5);
-    ctx.lineTo(-s * 0.66, s * 0.5);
-    ctx.closePath();
+    hull();
     ctx.fill();
+    ctx.save();
+    hull();
+    ctx.clip();
+    dirLight(ctx, -s, -s * 0.2, s, s * 0.55, 0.3);
+    ctx.restore();
 
     // 桅杆
     ctx.strokeStyle = 'rgba(95, 70, 52, 0.9)';
@@ -324,9 +360,13 @@ export class Boat {
     ctx.lineTo(0, -s * 1.5);
     ctx.stroke();
 
-    // 帆（受风鼓起，随时间轻微变形）
+    // 帆（受风鼓起，随时间轻微变形）。
+    // 【期二】帆面沿受光方向做左右渐变（扬起的白帆最有"被照亮"感）
     const bulge = Math.sin(this.phase * 1.4) * s * 0.1;
-    ctx.fillStyle = 'hsla(' + this.sailHue + ', 48%, 88%, 0.92)';
+    const sail = ctx.createLinearGradient(-s * 0.1, 0, s * 0.75, 0);
+    sail.addColorStop(0, 'hsla(' + this.sailHue + ', 52%, 93%, 0.95)');
+    sail.addColorStop(1, 'hsla(' + this.sailHue + ', 44%, 78%, 0.92)');
+    ctx.fillStyle = sail;
     ctx.beginPath();
     ctx.moveTo(0, -s * 1.45);
     ctx.quadraticCurveTo(s * 0.72 + bulge, -s * 0.8, 0, -s * 0.28);
@@ -373,14 +413,18 @@ export class Lighthouse {
     ctx.save();
     ctx.translate(this.x, this.y);
 
-    // 塔身（下宽上窄）
+    // 塔身（下宽上窄）。【期二】先平涂，再 clip 后叠方向性明暗 ——
+    // 白塔是展示"全局光从左上来"的最佳画布。
+    const tower = function () {
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.32, 0);
+      ctx.lineTo(-s * 0.2, -s * 1.5);
+      ctx.lineTo(s * 0.2, -s * 1.5);
+      ctx.lineTo(s * 0.32, 0);
+      ctx.closePath();
+    };
     ctx.fillStyle = 'rgba(238, 238, 232, 0.95)';
-    ctx.beginPath();
-    ctx.moveTo(-s * 0.32, 0);
-    ctx.lineTo(-s * 0.2, -s * 1.5);
-    ctx.lineTo(s * 0.2, -s * 1.5);
-    ctx.lineTo(s * 0.32, 0);
-    ctx.closePath();
+    tower();
     ctx.fill();
 
     // 红色环带
@@ -389,6 +433,13 @@ export class Lighthouse {
       const yy = -s * (0.45 + i * 0.62);
       ctx.fillRect(-s * 0.28 + i * s * 0.03, yy, s * 0.56 - i * s * 0.06, s * 0.19);
     }
+
+    // 方向性明暗（clip 进塔身：受光面亮，背光面沉）
+    ctx.save();
+    tower();
+    ctx.clip();
+    dirLight(ctx, -s * 0.4, -s * 1.6, s * 0.4, s * 0.1, 0.3);
+    ctx.restore();
 
     // 灯室
     ctx.fillStyle = 'rgba(60, 74, 86, 0.95)';
@@ -478,16 +529,25 @@ export class BeachUmbrella {
 
     // 伞面：四片扇形交替深浅
     const R = s * 0.95;
+    const ucx = 0, ucy = -s * 1.1;
     for (let i = 0; i < 6; i++) {
       ctx.fillStyle = i % 2 === 0
         ? 'hsl(' + this.hue + ', 68%, 70%)'
         : 'hsl(' + this.hue + ', 68%, 88%)';
       ctx.beginPath();
-      ctx.moveTo(0, -s * 1.1);
-      ctx.arc(0, -s * 1.1, R, Math.PI + (i / 6) * Math.PI, Math.PI + ((i + 1) / 6) * Math.PI);
+      ctx.moveTo(ucx, ucy);
+      ctx.arc(ucx, ucy, R, Math.PI + (i / 6) * Math.PI, Math.PI + ((i + 1) / 6) * Math.PI);
       ctx.closePath();
       ctx.fill();
     }
+    // 【期二】方向性明暗：光从左上来 → 左半边伞面亮、右半边沉
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(ucx, ucy, R, Math.PI, TAU);
+    ctx.closePath();
+    ctx.clip();
+    dirLight(ctx, ucx - R, ucy - R, ucx + R, ucy + R * 0.2, 0.26);
+    ctx.restore();
     ctx.restore();
   }
 
@@ -531,36 +591,50 @@ export class Palm {
     ctx.save();
     ctx.translate(this.x, this.y);
 
-    // 树干：轻微弯曲
-    ctx.strokeStyle = 'rgba(126, 100, 74, 0.95)';
-    ctx.lineWidth = Math.max(2.4, s * 0.14);
+    // 树干：轻微弯曲。【期二】双描边做出圆柱感 —— 先整条深色，
+    // 再沿受光侧（LIGHT 左上方向）偏移一条更细的亮色，树干就"圆"了。
+    const topX = this.lean * s * 1.2, topY = -s * 1.3;
     ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(96, 74, 54, 0.95)';                 // 背光基调
+    ctx.lineWidth = Math.max(2.4, s * 0.14);
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.quadraticCurveTo(this.lean * s * 0.6, -s * 0.7, this.lean * s * 1.2, -s * 1.3);
+    ctx.quadraticCurveTo(this.lean * s * 0.6, -s * 0.7, topX, topY);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(158, 128, 96, 0.85)';               // 受光侧
+    ctx.lineWidth = Math.max(1.1, s * 0.06);
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.03, -s * 0.05);
+    ctx.quadraticCurveTo(this.lean * s * 0.6 - s * 0.045, -s * 0.7, topX - s * 0.05, topY + s * 0.04);
     ctx.stroke();
 
     // 树冠
     ctx.save();
-    ctx.translate(this.lean * s * 1.2, -s * 1.3);
+    ctx.translate(topX, topY);
     ctx.rotate(sway);
-    ctx.strokeStyle = 'rgba(84, 140, 92, 0.92)';
+    // 【期二】叶片明暗随角度：朝上/朝左（受光）亮绿，朝下/朝右（背光）深绿
+    // —— 与地形的"左上受光"一致，树冠才不会像一团贴纸。
     ctx.lineWidth = Math.max(2.2, s * 0.12);
     for (let i = 0; i < this.fronds; i++) {
       const a = -Math.PI + (i / (this.fronds - 1)) * Math.PI;
       const droop = Math.abs(Math.cos(a)) * 0.5;
+      // a ∈ [-π, 0]：-π/2 朝正上。cos(a) 越负越朝左上 → 越亮。
+      const lit = clamp(0.5 - Math.cos(a) * 0.5, 0, 1);   // 0=右侧(背光) 1=左侧(受光)
+      ctx.strokeStyle = rgba(shade('84,140,92', (lit - 0.45) * 0.4), 0.92);
       ctx.beginPath();
       ctx.moveTo(0, 0);
       ctx.quadraticCurveTo(Math.cos(a) * s * 0.6, Math.sin(a) * s * 0.42 - s * 0.14,
                            Math.cos(a) * s * 1.05, Math.sin(a) * s * 0.42 + s * droop * 0.5);
       ctx.stroke();
     }
-    // 椰子
-    ctx.fillStyle = 'rgba(110, 84, 60, 0.95)';
+    // 椰子：本体 + 一点受光高光
     for (let i = 0; i < 2; i++) {
+      const cx2 = (i - 0.5) * s * 0.18, cy2 = s * 0.08;
+      ctx.fillStyle = 'rgba(110, 84, 60, 0.95)';
       ctx.beginPath();
-      ctx.arc((i - 0.5) * s * 0.18, s * 0.08, s * 0.1, 0, TAU);
+      ctx.arc(cx2, cy2, s * 0.1, 0, TAU);
       ctx.fill();
+      specular(ctx, cx2 - s * 0.03, cy2 - s * 0.035, s * 0.035, s * 0.02, { alpha: 0.35, rot: -0.5 });
     }
     ctx.restore();
     ctx.restore();
@@ -716,6 +790,8 @@ export class Shell {
       ctx.lineTo(Math.cos(a) * s, s * 0.5 + Math.sin(a) * s);
       ctx.stroke();
     }
+    // 【期二】壳面受光高光（与全局光同向的一小粒）
+    specular(ctx, -s * 0.32, s * 0.12, s * 0.2, s * 0.11, { alpha: 0.4, rot: -0.6 });
     ctx.restore();
   }
 
