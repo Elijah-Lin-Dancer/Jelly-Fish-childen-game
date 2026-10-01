@@ -284,8 +284,10 @@ export function createTerrain(opts = {}) {
   // 也不会随相机移动而「进海」（坐标是固定的世界几何）。
   function insideLandRegion(x, y) {
     if (type === 'island') return islandInside(x, y) !== null;   // 岛本来就是区域
-    if (type === 'slope') return y < shoreLineAt(x);             // 本期保留旧语义
-    return y <= shoreLineAt(x) && y >= landRearAt(x);            // shore：夹在两界之间
+    // shore / slope：夹在水线与内陆界之间。
+    // slope 的岸线是斜线，landRearAt 平行跟随（= 水线 - landDepth + 起伏），
+    // 所以「y 在两界之间」对 slope 自然成立 —— 斜岸线的陆地带也是斜带。
+    return y <= shoreLineAt(x) && y >= landRearAt(x);
   }
 
   // 在近景陆地带内采样一个点（保证落在区域内，不是「推」过去的）。

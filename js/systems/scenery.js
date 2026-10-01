@@ -288,7 +288,9 @@ export function createTerrainLayer() {
       //   island / slope 本期保持旧渲染（天空铺到水线 + 一段沙丘带），零回归。
       const warm = theme.name === 'shallow';
       const sun2 = dayNight.sun;
-      const isShore = tp.type === 'shore';
+      // shore / slope 都走「陆地区域」分层渲染（天空 → 山脊 → 近景陆地）；
+      // island 是环形岛，靠海床抬升体现，本期保持旧渲染。
+      const isShore = tp.type === 'shore' || tp.type === 'slope';
 
       if (isShore) {
         // —— 天空（铺到远景山脊上沿）——

@@ -798,7 +798,7 @@ export class Pier {
 
 // 每类元素的「带偏好」与数量。数量会按 quality 分级缩水。
 //  land:true 表示「岸上元素」—— 采样后要站在近景陆地区域内（见
-//  terrain.sampleLandPoint / pushAshore），而不是水面里。
+//  terrain.sampleLandPoint），而不是水面里。
 //  fromWater 决定它离水线的层次：值越大越靠内陆。
 //  层次保持：shell(贴水边) < pier/seagull < umbrella < palm < lighthouse(最内陆)。
 const PLAN = {
@@ -807,8 +807,8 @@ const PLAN = {
   lifebuoy:  { band: 'shallow',   n: 3,  land: false },
   boat:      { band: 'nearshore', n: 3,  land: false },
   // 【陆地区域模型】fromWater = 元素脚底离水线的最小距离（世界单位）。
-  //   shore 走 terrain.sampleLandPoint(x, fromWater, spread) —— 在陆地带内采样，
-  //   天然站在实体陆地上；slope 暂沿用 pushAshore（用 fromWater 作为纵深）。
+  //   shore / slope 都走 terrain.sampleLandPoint(x, fromWater, spread) ——
+  //   在陆地带内采样，天然站在实体陆地上；island 走岛型特例分支。
   //   上限由 landDepth(650~850) 约束，这些值都远小于它，不会推出区域。
   seagull:   { band: 'beach',     n: 4,  land: true,  fromWater: 45 },
   shell:     { band: 'beach',     n: 6,  land: true,  fromWater: 30 },
@@ -823,111 +823,6 @@ const CTORS = {
   seagull: Seagull, shell: Shell, umbrella: BeachUmbrella, palm: Palm,
   lighthouse: Lighthouse, pier: Pier,
 };
-
-/**
- * 把一个采样点「推」到陆地上。
- *
- * 为什么需要：`samplePoint('beach')` 匹配的是水深 0~150 的那一段，
- * 那是**水面之下**的浅水，不是沙滩。真正的沙滩在水线之上（depth < 0），
- * 属于 `land` 带。所以岸上元素（伞/棕榈/贝壳/海鸥/灯塔/栈桥）必须
- * 沿着「远离水线」的方向往上推，否则会出现"贝壳长在水里"。
- *
- * 两种地形的"远离水线"方向不同：
- *   - shore / slope：水线是一条横贯线，岸上 = y 更小（往上）。
- *   - island：水线是环形，岸上 = 朝岛心。单向往上推会推到岛外海里。
- *     岛心方向由「从当前点指向地形推荐的 home」近似得到 —— homePoint 在
- *     岛型下正是岛心，这是最省的可靠方向来源。
- *
- * @param {object} terrain 地形实例（需有 shoreLineAt / depthAt / homePoint）
- * @param {number} x 采样点 x
- * @param {number} y 采样点 y
- * @param {number} ahead 期望推到水线内侧多少（世界单位）
- */
-function pushAshore(terrain, x, y, ahead) {
-  // 已在陆地上且离水线够远 —— 直接用
-  if (terrain.depthAt(x, y) < 0) return { x, y };
-
-  const island = terrain.type === 'island';
-  let dx = 0, dy = -1;                 // 默认朝上（远离横向水线）
-  if (island) {
-    const h = terrain.homePoint();     // island 的 home 就是岛心
-    const vx = h.x - x, vy = h.y - y;
-    const L = Math.hypot(vx, vy) || 1;
-    dx = vx / L;
-    dy = vy / L;
-  } else {
-    // slope 地形的岸线是「斜」的：shoreBaseAt 里带 (x - sx0) * slopeA 的
-    // 线性倾斜。若还按 (0,-1) 垂直上推，推进方向与坡面法向偏了一个
-    // 夹角，元素会沿坡面横向漂移，最终落在水线以下 —— 实测 desktop/slope
-    // 有 1 个岸上元素入水（本地种子恰好没踩到，线上种子才暴露）。
-    // 因此这里用岸线的局部斜率求法向，让推进方向始终垂直于岸线。
-    const eps = 24;
-    const kSlope = (terrain.shoreLineAt(x + eps) - terrain.shoreLineAt(x - eps)) / (2 * eps);
-    // 岸线法向：岸线切向是 (1, k)，法向取 (-k, -1)（-1 指向内陆，即 y 减小侧）
-    const nx0 = -kSlope, ny0 = -1;
-    const L = Math.hypot(nx0, ny0) || 1;
-    dx = nx0 / L;
-    dy = ny0 / L;
-  }
-
-  // 沿着这个方向逐步推进，直到进入陆地。
-  // 步数给到 24：shore 的沙滩宽度是 95~170，某些种子下采样点离水线更远，
-  // 12 步（每步 ahead）在陡岸处推不进去。步长同时随失败次数放大，
-  // 保证越推越远、尽早收敛，而不是原地打转。
-  let px = x, py = y;
-  let hit = false;
-  for (let i = 0; i < 24; i++) {
-    const stepLen = ahead * (1 + i * 0.16);
-    px += dx * stepLen;
-    py += dy * stepLen;
-    if (terrain.depthAt(px, py) < 0) { hit = true; break; }
-    // 推过头跑到世界外了，立刻回退
-    if (px < WORLD.x0 || px > WORLD.x1 || py < WORLD.y0 || py > WORLD.y1) break;
-  }
-  if (!hit) {
-    // 兜底：整体回退到世界内的一个陆地密集区（水线内侧一小段）
-    const sl = terrain.shoreLineAt(x);
-    px = x;
-    py = sl - ahead;
-  }
-
-  // ---- 定位到目标深度 ----
-  // 目标深度由 ahead 直接映射：ahead 越小、越贴水线；越大、越靠内陆。
-  //   seagull(40) 约 -88 / shell(30) 约 -81 / umbrella(130) 约 -150
-  //   palm(240) 约 -228 / lighthouse(320) 约 -284
-  //
-  // 实现上的关键选择：不再按"方向 + 经验步长"迭代，而是**沿 y 向上做扫描**。
-  // 原因：按方向推进依赖岸线法向的正确性，而岸线在弯曲处（尤其 shore 的
-  // 正弦+fbm 扰动、island 的 islWobble）法向会失真，实测 756 个元素里有
-  // 2 个海鸥会因此卡在水里出不来。而 depthAt 关于 y 在近岸是单调的
-  // （越往内陆越负），所以直接向上扫描求"第一个达到目标深度的 y"就够，
-  // 既与 x 方向的岸线形状解耦，也不需要收敛假设。
-  //
-  // 扫描从一个保证在水下的起点开始，逐步向上，取首个 depth <= targetDepth
-  // 的位置。找不到（该列根本没有这么深的陆地，例如窄岛）就退回"刚出水"的点。
-  const sl0 = terrain.shoreLineAt(px);
-  const targetDepth = -(60 + ahead * 0.7);
-  const step = 12;
-  const maxSteps = Math.ceil(((sl0 - WORLD.y0) + 600) / step);
-  let chosen = null;      // 首个达到目标深度的点
-  let firstLand = null;   // 首个进入陆地的点（兜底）
-  for (let i = 0; i <= maxSteps; i++) {
-    const ny = py - i * step;
-    if (ny < WORLD.y0 + 8) break;
-    const d = terrain.depthAt(px, ny);
-    if (d < 0 && !firstLand) firstLand = ny;
-    if (d <= targetDepth) { chosen = ny; break; }
-  }
-  if (chosen != null) {
-    py = chosen;
-  } else if (firstLand != null) {
-    // 这一列没有足够深的陆地（窄岛/陡岸），退到刚出水的位置，
-    // 再往里走一点，确保不压在浪线上
-    py = Math.max(WORLD.y0 + 8, firstLand - 30);
-  }
-
-  return clampToWorld(px, py);
-}
 
 /**
  * 把点收进世界矩形。
@@ -990,11 +885,12 @@ export function createLife(terrain, seed, density = 1) {
         // 岛心必定是陆地（dome 最高处），最后的兜底
         if (!got) got = { x: cx, y: cy };
         x = got.x;
-        y = got.y;      } else if (cfg.land && terrain.type === 'shore') {
-        // 【陆地区域模型】shore 的岸上元素直接在近景陆地带内采样。
+        y = got.y;      } else if (cfg.land) {
+        // 【陆地区域模型】shore / slope 的岸上元素直接在近景陆地带内采样。
         // 不再「先采浅水带、再往内陆推」——那样依赖水线法向，岸线一弯就
         // 失真，元素会掉进海里。区域内采样让元素天然站在实体陆地上，
-        // 与相机移动、岸线弯曲完全无关。
+        // 与相机移动、岸线弯曲完全无关。slope 的岸线虽是斜的，但
+        // landRearAt 平行跟随水线，所以同一套 y 区间判据对 slope 也成立。
         const lp = terrain.sampleLandPoint(rng, cfg.fromWater, 70);
         if (lp && Number.isFinite(lp.x) && Number.isFinite(lp.y)) {
           x = lp.x;
@@ -1003,17 +899,12 @@ export function createLife(terrain, seed, density = 1) {
           continue;
         }
       } else {
+        // 水上元素（游泳者 / 儿童 / 救生圈 / 船）：按水深带采样
         const p = terrain.samplePoint(cfg.band, rng);
         if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
         // 同一带内多个元素容易叠在一起，加一点确定性抖动错开
         x = p.x + rangeFrom(rng, -60, 60);
         y = p.y + rangeFrom(rng, -26, 26);
-        // slope 等其它地形的岸上元素：仍沿用 pushAshore（本期只重构 shore）
-        if (cfg.land) {
-          const a = pushAshore(terrain, x, y, cfg.fromWater || 90);
-          x = a.x;
-          y = a.y;
-        }
       }
       // 统一收边：不管是采样抖动、岛内取点还是岸上吸附产生的坐标，
       // 都要保证落在世界矩形内，否则相机裁剪会让它「永远看不见」。
