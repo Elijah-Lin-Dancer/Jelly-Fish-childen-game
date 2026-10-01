@@ -35,6 +35,9 @@ export const camera = {
 
 /** 键盘移动意图（-1..1），由 main.js 的键盘监听写入 */
 export const camInput = { x: 0, y: 0 };
+// 触屏虚拟摇杆的轴向输入（与键盘 camInput 并存，相机每帧把二者合成）。
+// 键盘设 camInput，摇杆设 touchAxis，互不打断。
+export const touchAxis = { x: 0, y: 0 };
 
 // ---- 坐标换算（数据版）----
 // 实体需要「屏幕 → 世界」换算，但它们不该依赖 camera 实例（会引入循环依赖，

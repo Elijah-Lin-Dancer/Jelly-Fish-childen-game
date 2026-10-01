@@ -3,7 +3,7 @@
 // ============================================================
 
 import { DPR, rand, isMobile, TAU } from './core/config.js';
-import { view, pointer, theme, dayNight, app, perf, setTier, quality, camera, camInput } from './core/state.js';
+import { view, pointer, theme, dayNight, app, perf, setTier, quality, camera, camInput, touchAxis } from './core/state.js';
 import { createScheduler } from './core/loop.js';
 import { createResize } from './core/resize.js';
 import { createAudio } from './core/audio.js';
@@ -44,6 +44,7 @@ import { createAtlas } from './ui/atlas.js';
 import { Secret, seedSecrets } from './entities/secret.js';
 import { createMemory } from './gameplay/memory.js';
 import { createMemoryPad } from './ui/memoryPad.js';
+import { createTouchPad } from './ui/touchPad.js';
 import { createBuildPad } from './ui/buildPad.js';
 import { createWorldPanel } from './ui/createWorld.js';
 import { Bogyo } from './entities/bogyo.js';
@@ -309,9 +310,19 @@ function goHome(snap) {
   // 高视口（竖屏 vh 能到 2100+）下 cy + vh 会超出世界水底 y1，
   // 此时只能退让、把景物放到屏幕更下方 —— 靠放大世界解决不了，
   // 因为世界变高时 vh 同比变大，需求会一起涨（实测不动点要 h≈7400）。
+  //
+  // ⚠ 关键修复（11B 收尾）：下面 clamp 的是「相机中心」cy，而 camera.bounds
+  //   里的 minY/maxY 是相机**左上角 tx/ty** 的范围。两者差半个视口高 vh/2。
+  //   旧代码把 cy 直接 clamp 到 [minY, maxY]，竖屏 vh 大时 cy 被压到 maxY，
+  //   经 centerOn(ty = cy - vh/2) 换算后 ty 溢出 minY 被夹回最上界 ——
+  //   相机初始贴在 Y 上界，向上(W/↑)移动零余量、肉眼=完全不动（向下/横向正常）。
+  //   改 clamp 到「中心范围」[minY+vh/2, maxY+vh/2]，相机初始居中，
+  //   上/下都留出余量。横屏下 cy 本就在范围内，行为不变。
   const minY = WORLD.y0;
   const maxY = Math.max(WORLD.y0, WORLD.y1 - cam.vh);
-  cy = Math.max(minY, Math.min(maxY, cy));
+  const minCenterY = minY + cam.vh / 2;
+  const maxCenterY = maxY + cam.vh / 2;
+  cy = Math.max(minCenterY, Math.min(maxCenterY, cy));
   cam.centerOn(h.x, cy, snap !== false);
 }
 
@@ -592,6 +603,11 @@ function toggleSound() {
   }
   return on;
 }
+
+// 手机端虚拟摇杆：触屏设备才创建 DOM（内部已判断），桌面鼠标无开销
+const touchPad = createTouchPad(touchAxis);
+touchPad.mount();
+touchPad.show();
 
 const hud = createHud({
   toggleSound,

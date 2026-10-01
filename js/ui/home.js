@@ -100,6 +100,12 @@ export function createHome({
 
   function enter() {
     hide();
+    // 键盘健壮性防御：进入游戏时把焦点从任何元素（尤其创建面板的种子/名字
+    // 输入框）移开。否则 activeElement 仍是 <input>，main.js 的 onKeyDown 会因
+    // isTypingTarget 直接忽略所有键 —— 表现为「进游戏后 WASD/方向键全失灵」。
+    if (document.activeElement && document.activeElement.blur) {
+      try { document.activeElement.blur(); } catch (e) { /* 忽略 */ }
+    }
     if (!entered) {
       entered = true;
       if (onStart) onStart();

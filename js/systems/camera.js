@@ -21,7 +21,7 @@
 //   3. 所有实体只认世界坐标，渲染时才通过 toScreen / apply 转换。
 import { clamp, damp } from '../core/config.js';
 import { WORLD } from './terrain.js';
-import { view, camera, camInput, CAM_SPEED, CAM_EASE, CAM_DAMP } from '../core/state.js';
+import { view, camera, camInput, touchAxis, CAM_SPEED, CAM_EASE, CAM_DAMP } from '../core/state.js';
 
 // 世界相对视口的「溢出倍率」。1 = 恰好铺满（会锁死一个方向），
 // 1.15 → 两个方向都留出约 13% 的可移动余量，观感上世界比屏幕大一圈。
@@ -194,11 +194,13 @@ export function createCamera() {
     // 第一帧兜底：scale 还没算出来就直接补一次（不依赖 start() 的调用顺序）
     if (!Number.isFinite(camera.scale) || camera.scale <= 0) resize();
     sanitize();
-    // 键盘 / 按钮移动
-    if (camInput.x || camInput.y) {
+    // 键盘 / 按钮移动：与触屏摇杆 touchAxis 合成（并存，互不覆盖）
+    const ix = clamp(camInput.x + touchAxis.x, -1, 1);
+    const iy = clamp(camInput.y + touchAxis.y, -1, 1);
+    if (ix || iy) {
       const step = (CAM_SPEED * dt) / 1000;
-      camera.tx += camInput.x * step;
-      camera.ty += camInput.y * step;
+      camera.tx += ix * step;
+      camera.ty += iy * step;
       clampToBounds(false);
     }
     // 缓动：拖完松手后轻微回落，方向键则平滑推进
