@@ -52,7 +52,7 @@ import { dailyRareIndex } from './gameplay/daily.js';
 import { Jellyfish, JELLY_PALETTES, weightedPaletteIndex } from './entities/jellyfish.js';
 import { FishSchool } from './entities/fish.js';
 import { Turtle } from './entities/turtle.js';
-import { Whale } from './entities/whale.js';
+import { Whale, setWhaleTerrain } from './entities/whale.js';
 import { Plankton, Bubble, Seaweed, Ripple, Bait, Celebrate } from './entities/env.js';
 import { createLife, pickLife } from './entities/life.js';
 
@@ -204,6 +204,9 @@ const terrain = {
   zoneAt(x, y) { return terrainRef.current.zoneAt(x, y); },
   shoreLineAt(x) { return terrainRef.current.shoreLineAt(x); },
   landRearAt(x) { return terrainRef.current.landRearAt(x); },
+  // island 渲染用：岛缘闭合轮廓 / 等高环 / 逐列剖面（非 island 地形返回 null）
+  islandOutline(n) { return terrainRef.current.islandOutline(n); },
+  islandProfileAt(x) { return terrainRef.current.islandProfileAt(x); },
   surfaceAt(x) { return terrainRef.current.surfaceAt(x); },
   landHeightAt(x, y) { return terrainRef.current.landHeightAt(x, y); },
   temperatureAt(x) { return terrainRef.current.temperatureAt(x); },
@@ -234,6 +237,9 @@ if (typeof window !== 'undefined') {
     bandAt(x, y) { const b = bandOf(terrainRef.current.depthAt(x, y)); return { id: b.id, key: b.key }; },
     depthAt(x, y) { return terrainRef.current.depthAt(x, y); },
     landRear(x) { return terrainRef.current.landRearAt(x); },
+    /** island 渲染用：岛缘轮廓 / 等高环 / 逐列剖面（非 island 返回 null） */
+    islandOutline(n) { return terrainRef.current.islandOutline(n); },
+    islandProfileAt(x) { return terrainRef.current.islandProfileAt(x); },
     insideLandRegion(x, y) { return terrainRef.current.insideLandRegion(x, y); },
     get home() { return terrainRef.current.homePoint(); },
     /** 生命元素：数量 / 类型分布 / 世界坐标（测试与调试用） */
@@ -1441,6 +1447,8 @@ window.addEventListener('blur', onKeyBlur);
 
 // 把地形交给场景层（岸线 / 海床 / 深度雾 / 光束衰减都依赖它）
 setTerrainProvider(terrain);
+// 鲸鱼是远洋生物，需要知道水深以避开浅滩/陆地（否则剪影会压在岛体上）
+setWhaleTerrain(terrain);
 
 // ---------- 调度器 ----------
 const scheduler = createScheduler();

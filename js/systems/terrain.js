@@ -6,7 +6,7 @@
 //
 // depthAt(x, y) 返回「水深」：< 0 表示陆地高度（抬升），0 附近是水线，> 0 是水深。
 // 深度已饱和到 MAX_DEPTH，不会随 y 无限增长。
-import { clamp, lerp } from '../core/config.js';
+import { clamp, lerp, TAU } from '../core/config.js';
 import { makeRng, rangeFrom } from '../core/seed.js';
 
 export const WORLD = {
@@ -320,6 +320,60 @@ export function createTerrain(opts = {}) {
     return 520 * (1 - Math.exp(-d / 300)) + 1000 * (1 - Math.exp(-d / 1200));
   }
 
+  // 【island 专属】给定 x，返回该列岛体的纵向剖面 { top, bot }（worldY）。
+  //   island 是圆形的，用一维函数（landRearAt / shoreLineAt）描述不了它：
+  //   逐列画横带会把环轮廓抹成一块横贯屏幕的沙洲。
+  // 【island 专属 · 渲染用】岛缘闭合轮廓（世界坐标点表）。
+  //   为什么不用「逐列上包络」画岛：包络在岛的左右两个极点处会发生拓扑
+  //   跳变（远岸沿与近岸沿在那里相交），屏幕表现就是被垂直切掉的两条直边
+  //   —— 看着像块布丁，不像岛。
+  //   岛的边界本质就是极坐标曲线 r = islandEdge(θ)，自身闭合且处处光滑，
+  //   直接按角度打点连成闭合折线，轮廓天然正确、无尖角。
+  //   返回 [{x, y}, ...]（首尾不重复，调用方 closePath）。
+  function islandOutline(n) {
+    const N = n || 144;
+    const pts = [];
+    for (let i = 0; i < N; i++) {
+      const ang = (i / N) * TAU;
+      const c = Math.cos(ang), s = Math.sin(ang);
+      // 直接按角度算边缘半径（避免再走一遍 atan2）
+      const wob = 1 +
+        Math.sin(ang * 3 + p.nPhase) * p.islWobble +
+        fbm1(ang * 2.4 + p.nPhase, 2) * p.islWobble;
+      const edge = p.islR * wob;
+      pts.push({ x: p.islX + c * edge, y: p.islY + s * edge });
+    }
+    return pts;
+  }
+
+  // 【island 专属 · 渲染用】给定 x，返回岛体在该列的纵向剖面 { top, bot }（worldY）。
+  //   用于「岛上的高光/水线/湿沙」等沿边元素（它们要贴着实心区域走）。
+  //   ⚠ 不能用二分：islandEdge 带角度扰动（sin(ang*3)+fbm），岛并非
+  //     「中心到边界单调」，沿竖直线二分会在 wobble 的凹陷处提前判假。
+  //     这里用固定步长扫描 + 边界精修。
+  function islandProfileAt(x) {
+    const yLo = p.islY - p.islR * 1.75;
+    const yHi = p.islY + p.islR * 1.75;
+    const STEP = 24;
+    let top = null, bot = null;
+    for (let y = yLo; y <= yHi; y += STEP) {
+      if (islandInside(x, y) === null) continue;
+      if (top === null) top = y;
+      bot = y;
+    }
+    if (top === null) return null;
+    // 边界精修：在 [top-STEP, top] 与 [bot, bot+STEP] 内再走一遍细步长，
+    // 避免轮廓呈阶梯状（粗步长的锯齿在屏幕上会很明显）。
+    const FINE = 4;
+    for (let y = top - STEP; y < top; y += FINE) {
+      if (islandInside(x, y) !== null && y < top) top = y;
+    }
+    for (let y = bot + STEP; y > bot; y -= FINE) {
+      if (islandInside(x, y) !== null && y > bot) bot = y;
+    }
+    return { top, bot };
+  }
+
   // 岛屿边缘半径（带角度扰动，让岛不是完美圆形）
   function islandEdge(x, y) {
     const ang = Math.atan2(y - p.islY, x - p.islX);
@@ -464,6 +518,8 @@ export function createTerrain(opts = {}) {
     params: p,
     shoreLineAt,
     landRearAt,
+    islandOutline,
+    islandProfileAt,
     landHeightAt,
     insideLandRegion,
     sampleLandPoint,
