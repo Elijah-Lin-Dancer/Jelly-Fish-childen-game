@@ -642,15 +642,9 @@ const activity = createActivity(() => jellyfish, {
 const current = createCurrent();
 
 // ---------- HUD ----------
-/** 统一的声音开关（HUD 按钮与设置面板共用），返回最新状态 */
+/** 统一的声音开关（设置面板唯一入口；原右下角重复的声音按钮已删除），返回最新状态 */
 function toggleSound() {
-  const on = audio.toggle();
-  const btn = document.getElementById('sound-btn');
-  if (btn) {
-    btn.textContent = on ? '🔊' : '🔇';
-    btn.classList.toggle('muted', !on);
-  }
-  return on;
+  return audio.toggle();
 }
 
 // 手机端虚拟摇杆：触屏设备才创建 DOM（内部已判断），桌面鼠标无开销
@@ -931,6 +925,24 @@ function setupZoneContent(zoneId) {
 // ---------- 设置面板 ----------
 const settings = createSettings({
   toggleSound,
+  // 自右下角移入的配置项：主题 / 语言 / 昼夜
+  setTheme: (name) => {
+    if (theme.name === name) return;
+    theme.name = name;
+    hud.refreshTheme();
+  },
+  setLang: (lang) => {
+    if (app.lang === lang) return;
+    toggleLang();
+    hud.refreshLang();
+    hud.refreshButtons();
+    home.refreshLang();
+  },
+  toggleDayNight: () => {
+    dayNight.enabled = !dayNight.enabled;
+    hud.refreshButtons();
+    hud.refreshPhase();
+  },
   // 用户手动选画质后关闭自动降级；选"自动"时重新开启
   onAutoQuality: (auto) => {
     if (auto) perfMon.enable && perfMon.enable();

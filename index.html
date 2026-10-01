@@ -43,17 +43,19 @@
 </div>
 
 <div class="hud hud-bottom-right">
-  <div class="btn" id="feed-btn" role="button" tabindex="0" data-i18n-title="btn.feed" aria-label="Feed"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="14" r="6"/><circle cx="9.5" cy="12" r="1.6" class="ic-hi"/><circle cx="10" cy="2.6" r="1.5" class="ic-hi"/><circle cx="14" cy="4.4" r="1" class="ic-hi"/></svg></div>
-  <div class="btn" id="current-btn" role="button" tabindex="0" data-i18n-title="btn.current" aria-label="Currents"><svg class="ic" viewBox="0 0 24 24"><path d="M2 9c3-2.6 6-2.6 9 0s6 2.6 9 0"/><path d="M2 15c3-2.6 6-2.6 9 0s6 2.6 9 0"/></svg></div>
-  <div class="btn" id="atlas-btn" role="button" tabindex="0" data-i18n-title="btn.atlas" aria-label="Explore atlas"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15.6 8.4 13.5 13.5 8.4 15.6 10.5 10.5z"/></svg></div>
-  <div class="btn" id="build-btn" role="button" tabindex="0" data-i18n-title="btn.build" aria-label="Build"><svg class="ic" viewBox="0 0 24 24"><path d="M3 19l5-9 3 3 4-7 6 13z"/><path d="M9 10V6M15 6V3"/></svg></div>
-  <div class="btn" id="lab-btn" role="button" tabindex="0" data-i18n-title="btn.lab" aria-label="Breeding lab"><svg class="ic" viewBox="0 0 24 24"><path d="M9 3h6"/><path d="M10.5 3.2v6.3L5.6 18a2 2 0 0 0 1.7 3h9.4a2 2 0 0 0 1.7-3l-4.9-8.5V3.2"/><path d="M7.6 15h8.8"/></svg></div>
-  <div class="btn" id="nest-btn" role="button" tabindex="0" data-i18n-title="btn.nest" aria-label="Bring home"><svg class="ic" viewBox="0 0 24 24"><path d="M3 11 12 3l9 8"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5.5h4V20"/></svg></div>
-  <div class="btn" id="share-btn" role="button" tabindex="0" data-i18n-title="btn.share" aria-label="Share"><svg class="ic" viewBox="0 0 24 24"><path d="M4 15v4.5h16V15"/><path d="M12 15V3.5"/><path d="m7.6 7.9 4.4-4.4 4.4 4.4"/></svg></div>
-  <div class="btn" id="theme-btn" role="button" tabindex="0" data-i18n-title="btn.theme" aria-label="Theme"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.4"/><path d="M12 2v2.4M12 19.6V22M2 12h2.4M19.6 12H22M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M19.1 4.9l-1.7 1.7M6.6 17.4l-1.7 1.7"/></svg></div>
-  <div class="btn" id="daynight-btn" role="button" tabindex="0" data-i18n-title="btn.daynight" aria-label="Day-night"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4v16"/></svg></div>
-  <div class="btn" id="sound-btn" role="button" tabindex="0" data-i18n-title="btn.sound" aria-label="Sound"><svg class="ic" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path d="M18 6.8a7.6 7.6 0 0 1 0 10.4"/></svg></div>
-  <div class="btn" id="lang-btn" role="button" tabindex="0" data-i18n-title="btn.lang" aria-label="Language">EN</div>
+  <!-- 玩法动作收纳为 FAB：平时一颗钮，点开沿弧展开（移动端不再遮挡画面） -->
+  <div class="fab" id="fab">
+    <div class="fab-tray" id="fab-tray">
+      <div class="btn" id="feed-btn" role="button" tabindex="0" data-i18n-title="btn.feed" aria-label="Feed"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="14" r="6"/><circle cx="9.5" cy="12" r="1.6" class="ic-hi"/><circle cx="10" cy="2.6" r="1.5" class="ic-hi"/><circle cx="14" cy="4.4" r="1" class="ic-hi"/></svg></div>
+      <div class="btn" id="current-btn" role="button" tabindex="0" data-i18n-title="btn.current" aria-label="Currents"><svg class="ic" viewBox="0 0 24 24"><path d="M2 9c3-2.6 6-2.6 9 0s6 2.6 9 0"/><path d="M2 15c3-2.6 6-2.6 9 0s6 2.6 9 0"/></svg></div>
+      <div class="btn" id="atlas-btn" role="button" tabindex="0" data-i18n-title="btn.atlas" aria-label="Explore atlas"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15.6 8.4 13.5 13.5 8.4 15.6 10.5 10.5z"/></svg></div>
+      <div class="btn" id="build-btn" role="button" tabindex="0" data-i18n-title="btn.build" aria-label="Build"><svg class="ic" viewBox="0 0 24 24"><path d="M3 19l5-9 3 3 4-7 6 13z"/><path d="M9 10V6M15 6V3"/></svg></div>
+      <div class="btn" id="lab-btn" role="button" tabindex="0" data-i18n-title="btn.lab" aria-label="Breeding lab"><svg class="ic" viewBox="0 0 24 24"><path d="M9 3h6"/><path d="M10.5 3.2v6.3L5.6 18a2 2 0 0 0 1.7 3h9.4a2 2 0 0 0 1.7-3l-4.9-8.5V3.2"/><path d="M7.6 15h8.8"/></svg></div>
+      <div class="btn" id="nest-btn" role="button" tabindex="0" data-i18n-title="btn.nest" aria-label="Bring home"><svg class="ic" viewBox="0 0 24 24"><path d="M3 11 12 3l9 8"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5.5h4V20"/></svg></div>
+    </div>
+    <div class="btn fab-main" id="fab-main" role="button" tabindex="0" data-i18n-title="btn.actions" aria-label="Game actions" aria-expanded="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span class="fab-dot"></span></div>
+  </div>
+  <!-- 配置类（主题/昼夜/声音/语言/分享）已移入设置面板与图鉴，右下角只留玩法与设置 -->
   <div class="btn" id="settings-btn" role="button" tabindex="0" data-i18n-title="btn.settings" aria-label="Settings"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.6l1.5 2.6h3l1.5 2.6-1.5 2.6 1.5 2.6-1.5 2.6h-3L12 21.4l-1.5-2.6h-3L6 16.2l1.5-2.6L6 11l1.5-2.6h3z"/></svg></div>
 </div>
 
@@ -71,6 +73,18 @@
     <div class="settings-row">
       <div class="settings-label" id="settings-tier-label">Quality</div>
       <div class="seg-group" id="settings-tier"></div>
+    </div>
+    <div class="settings-row">
+      <div class="settings-label" id="settings-theme-label">Theme</div>
+      <div class="seg-group" id="settings-theme"></div>
+    </div>
+    <div class="settings-row">
+      <div class="settings-label" id="settings-lang-label">Language</div>
+      <div class="seg-group" id="settings-lang"></div>
+    </div>
+    <div class="settings-row">
+      <div class="settings-label" id="settings-daynight-label">Day-night</div>
+      <div class="switch" id="settings-daynight" role="switch" tabindex="0" aria-label="Day-night"><span class="knob"></span></div>
     </div>
     <div class="settings-row">
       <div class="settings-label" id="settings-motion-label">Reduce motion</div>
@@ -156,6 +170,7 @@
     <div class="dex-head">
       <div class="dex-head-title" id="dex-title">Jellyfish Codex</div>
       <div class="dex-progress" id="dex-progress"></div>
+      <div class="dex-head-share" id="dex-share" role="button" tabindex="0" data-i18n-title="btn.share" aria-label="Save postcard"><svg class="ic" viewBox="0 0 24 24"><path d="M4 15v4.5h16V15"/><path d="M12 15V3.5"/><path d="m7.6 7.9 4.4-4.4 4.4 4.4"/></svg></div>
       <div class="dex-close" id="dex-close" role="button" tabindex="0" aria-label="Close">✕</div>
     </div>
     <div class="dex-grid" id="dex-grid"></div>

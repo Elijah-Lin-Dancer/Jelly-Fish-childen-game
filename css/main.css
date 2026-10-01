@@ -1222,3 +1222,76 @@ body.build-mode #ocean-canvas { cursor: cell; }
   will-change: transform;
   pointer-events: none;
 }
+
+/* ============================================================
+   右下角按钮区重构：
+   - 6 个玩法按钮收进 FAB（fab），点开沿 1/4 圆弧展开（JS 算 --tx/--ty）
+   - 配置类（主题/昼夜/声音/语言）移入设置面板；分享移入图鉴面板
+   - 闲置 7 秒整体减淡（body.hud-idle），任何输入立即恢复
+   ============================================================ */
+.fab {
+  position: relative;
+  display: flex;
+}
+.fab-main .ic { transition: transform 0.3s ease; }
+.fab.open .fab-main .ic { transform: rotate(45deg); }
+.fab-dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffd479;
+  box-shadow: 0 0 8px rgba(255, 212, 121, 0.9);
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+.fab.mode-on .fab-dot { opacity: 1; }
+
+.fab-tray {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.fab-tray .btn {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(var(--tx, 0px), var(--ty, 0px)) scale(1);
+  opacity: 1;
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.22s ease;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+.fab:not(.open) .fab-tray .btn {
+  transform: translate(0, 0) scale(0.3);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 闲置减淡：只减淡右下角操作区，任何输入恢复 */
+.hud-bottom-right { transition: opacity 0.7s ease; }
+body.hud-idle .hud-bottom-right { opacity: 0.22; }
+
+/* 图鉴面板头部的分享按钮（与 dex-close 同款，位于其左侧） */
+.dex-head-share {
+  position: absolute;
+  right: 38px;
+  top: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: #cfeaff;
+  cursor: pointer;
+}
+.dex-head-share .ic { width: 15px; height: 15px; }
+.dex-head-share:hover { color: #ffffff; }

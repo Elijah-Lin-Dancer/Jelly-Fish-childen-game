@@ -3,7 +3,7 @@
 // ============================================================
 
 import { t } from './i18n.js';
-import { collection, theme, dayNight, app, perf } from '../core/state.js';
+import { collection, theme, dayNight, perf } from '../core/state.js';
 import { JELLY_KEYS } from './locales.js';
 
 export function createHud(actions) {
@@ -23,15 +23,15 @@ export function createHud(actions) {
     buildBtn: document.getElementById('build-btn'),
     zoneText: document.getElementById('zone-text'),
     worldText: document.getElementById('world-text'),
-    themeBtn: document.getElementById('theme-btn'),
-    soundBtn: document.getElementById('sound-btn'),
-    langBtn: document.getElementById('lang-btn'),
-    dnBtn: document.getElementById('daynight-btn'),
     ach: document.getElementById('ach'),
     achText: document.getElementById('ach-text'),
     nestBtn: document.getElementById('nest-btn'),
-    shareBtn: document.getElementById('share-btn'),
     settingsBtn: document.getElementById('settings-btn'),
+    // 右下角 FAB（玩法按钮收纳）+ 图鉴面板分享钮
+    fab: document.getElementById('fab'),
+    fabMain: document.getElementById('fab-main'),
+    fabTray: document.getElementById('fab-tray'),
+    dexShare: document.getElementById('dex-share'),
   };
 
   let toastTimer = null;
@@ -123,8 +123,12 @@ export function createHud(actions) {
   function refreshButtons() {
     if (el.feedBtn) el.feedBtn.classList.toggle('active', !!actions.isFeedMode && actions.isFeedMode());
     if (el.currentBtn) el.currentBtn.classList.toggle('active', !!actions.isCurrentMode && actions.isCurrentMode());
-    if (el.langBtn) el.langBtn.textContent = app.lang === 'zh' ? '中' : 'EN';
-    if (el.dnBtn) el.dnBtn.classList.toggle('muted', !dayNight.enabled);
+    // FAB 上的小金点：喂食/洋流模式进行中，提醒孩子"有事情在发生"
+    if (el.fab) {
+      const modeOn = (!!actions.isFeedMode && actions.isFeedMode()) ||
+                     (!!actions.isCurrentMode && actions.isCurrentMode());
+      el.fab.classList.toggle('mode-on', !!modeOn);
+    }
     if (el.hint) el.hint.classList.toggle('feed', !!actions.isFeedMode && actions.isFeedMode());
     if (el.hint) el.hint.classList.toggle('current', !!actions.isCurrentMode && actions.isCurrentMode());
   }
@@ -132,19 +136,81 @@ export function createHud(actions) {
   function refreshLang() {
     refreshDex(); refreshPhase(); refreshTheme();
   }
+  // ---------- 右下角 FAB（玩法动作收纳） ----------
+  let fabOpen = false;
+
+  /** 托盘按钮沿 1/4 圆弧摆开（90° 正上 → 180° 正左），半径随视口缩放 */
+  function layoutTray() {
+    if (!el.fabTray) return;
+    const btns = el.fabTray.querySelectorAll('.btn');
+    const n = btns.length;
+    if (!n) return;
+    const mobile = Math.min(window.innerWidth, window.innerHeight) <= 620;
+    const R = mobile ? 92 : 118;
+    btns.forEach((b, i) => {
+      const ang = Math.PI * (0.5 + 0.5 * (n > 1 ? i / (n - 1) : 0));
+      // 屏幕坐标 y 向下：θ=90° → 正上 (0,-R)，θ=180° → 正左 (-R,0)
+      const tx = Math.cos(ang) * R;
+      const ty = -Math.sin(ang) * R;
+      b.style.setProperty('--tx', tx.toFixed(1) + 'px');
+      b.style.setProperty('--ty', ty.toFixed(1) + 'px');
+    });
+  }
+
+  function setFab(open) {
+    fabOpen = !!open;
+    if (el.fab) el.fab.classList.toggle('open', fabOpen);
+    if (el.fabMain) el.fabMain.setAttribute('aria-expanded', fabOpen ? 'true' : 'false');
+    if (el.fabTray) el.fabTray.setAttribute('aria-hidden', fabOpen ? 'false' : 'true');
+    if (fabOpen) layoutTray();
+  }
+
+  /** 闲置减淡：7 秒无输入 → 右下角操作区降透明度；FAB 展开期间不减淡 */
+  let idleTimer = null;
+  function pokeIdle() {
+    document.body.classList.remove('hud-idle');
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      if (!fabOpen) document.body.classList.add('hud-idle');
+    }, 7000);
+  }
+
   function bind() {
-    if (el.soundBtn) el.soundBtn.addEventListener('click', () => actions.toggleSound());
-    if (el.langBtn) el.langBtn.addEventListener('click', () => actions.toggleLang());
-    if (el.themeBtn) el.themeBtn.addEventListener('click', () => actions.toggleTheme());
     if (el.feedBtn) el.feedBtn.addEventListener('click', () => actions.toggleFeed());
     if (el.currentBtn) el.currentBtn.addEventListener('click', () => actions.toggleCurrent && actions.toggleCurrent());
     if (el.labBtn) el.labBtn.addEventListener('click', () => actions.openLab && actions.openLab());
     if (el.atlasBtn) el.atlasBtn.addEventListener('click', () => actions.openAtlas && actions.openAtlas());
     if (el.buildBtn) el.buildBtn.addEventListener('click', () => actions.openBuild && actions.openBuild());
-    if (el.dnBtn) el.dnBtn.addEventListener('click', () => actions.toggleDayNight());
     if (el.nestBtn) el.nestBtn.addEventListener('click', () => actions.toggleActivity && actions.toggleActivity());
-    if (el.shareBtn) el.shareBtn.addEventListener('click', () => actions.share && actions.share());
     if (el.settingsBtn) el.settingsBtn.addEventListener('click', () => actions.openSettings && actions.openSettings());
+    if (el.dexShare) {
+      el.dexShare.addEventListener('click', () => actions.share && actions.share());
+      el.dexShare.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (actions.share) actions.share(); }
+      });
+    }
+
+    // FAB 开合：点击 / 键盘；点托盘任一动作后自动收起（capture 阶段收起，动作照常触发）
+    if (el.fabMain) {
+      const toggleFab = () => setFab(!fabOpen);
+      el.fabMain.addEventListener('click', toggleFab);
+      el.fabMain.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleFab(); }
+      });
+    }
+    if (el.fabTray) el.fabTray.addEventListener('click', () => setFab(false), true);
+    document.addEventListener('click', (e) => {
+      if (fabOpen && el.fab && !el.fab.contains(e.target)) setFab(false);
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && fabOpen) setFab(false); });
+    window.addEventListener('resize', () => { if (fabOpen) layoutTray(); });
+
+    // 闲置减淡监听（任何输入立即恢复亮度）
+    ['pointerdown', 'pointermove', 'keydown', 'touchstart'].forEach((ev) => {
+      window.addEventListener(ev, pokeIdle, { passive: true });
+    });
+    pokeIdle();
+
     if (el.dex) {
       el.dex.addEventListener('click', () => actions.openDex && actions.openDex());
       el.dex.addEventListener('keydown', (e) => {

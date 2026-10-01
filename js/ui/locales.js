@@ -100,6 +100,7 @@ export const LOCALES = {
     'btn.build': 'Reef workshop',
     'btn.share': 'Save postcard',
     'btn.settings': 'Settings',
+    'btn.actions': 'Game actions',
 
     'dex.label': '{n}/{total} species found',
     'dex.new': 'New species!',
@@ -148,6 +149,9 @@ export const LOCALES = {
     'settings.quality.low': 'Low',
     'settings.reduceMotion': 'Reduce motion',
     'settings.sound': 'Sound',
+    'settings.theme': 'Theme',
+    'settings.language': 'Language',
+    'settings.daynight': 'Day-night cycle',
 
     'coach.step1': '👆 Move your pointer to attract jellyfish',
     'coach.step2': '✋ Hold to summon a new jellyfish — tap to unlock species',
@@ -363,6 +367,7 @@ export const LOCALES = {
     'btn.build': '珊瑚工坊',
     'btn.share': '保存明信片',
     'btn.settings': '设置',
+    'btn.actions': '游戏操作',
 
     'dex.label': '已发现 {n}/{total} 种',
     'dex.new': '新物种！',
@@ -411,6 +416,9 @@ export const LOCALES = {
     'settings.quality.low': '低',
     'settings.reduceMotion': '减弱动效',
     'settings.sound': '声音',
+    'settings.theme': '主题',
+    'settings.language': '语言',
+    'settings.daynight': '昼夜循环',
 
     'coach.step1': '👆 移动鼠标 / 手指吸引水母',
     'coach.step2': '✋ 长按召唤新水母 — 点击可解锁物种',

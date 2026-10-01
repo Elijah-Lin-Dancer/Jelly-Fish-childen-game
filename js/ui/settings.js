@@ -7,7 +7,7 @@
 // ============================================================
 
 import { t } from './i18n.js';
-import { setTier, perf } from '../core/state.js';
+import { setTier, perf, theme, dayNight, app } from '../core/state.js';
 
 const STORAGE_KEY = 'ocean.settings';
 
@@ -34,6 +34,13 @@ export function createSettings(actions = {}) {
     tierLabel: document.getElementById('settings-tier-label'),
     motionLabel: document.getElementById('settings-motion-label'),
     soundLabel: document.getElementById('settings-sound-label'),
+    // 自右下角移入的配置项：主题 / 语言 / 昼夜
+    themeSeg: document.getElementById('settings-theme'),
+    langSeg: document.getElementById('settings-lang'),
+    daynight: document.getElementById('settings-daynight'),
+    themeLabel: document.getElementById('settings-theme-label'),
+    langLabel: document.getElementById('settings-lang-label'),
+    daynightLabel: document.getElementById('settings-daynight-label'),
   };
 
   const state = load();
@@ -58,11 +65,33 @@ export function createSettings(actions = {}) {
     }
   }
 
+  /** seg-group 通用构建（主题/语言沿用画质行的交互模式） */
+  function buildSeg(container, options, isCurrent, onPick) {
+    if (!container) return;
+    container.innerHTML = '';
+    for (const o of options) {
+      const b = document.createElement('div');
+      b.className = 'seg' + (isCurrent(o) ? ' active' : '');
+      b.textContent = o.label;
+      b.setAttribute('role', 'button');
+      b.tabIndex = 0;
+      const pick = () => { onPick(o); render(); };
+      b.addEventListener('click', pick);
+      b.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); }
+      });
+      container.appendChild(b);
+    }
+  }
+
   function render() {
     if (el.title) el.title.textContent = t('settings.title');
     if (el.tierLabel) el.tierLabel.textContent = t('settings.quality');
     if (el.motionLabel) el.motionLabel.textContent = t('settings.reduceMotion');
     if (el.soundLabel) el.soundLabel.textContent = t('settings.sound');
+    if (el.themeLabel) el.themeLabel.textContent = t('settings.theme');
+    if (el.langLabel) el.langLabel.textContent = t('settings.language');
+    if (el.daynightLabel) el.daynightLabel.textContent = t('settings.daynight');
 
     if (el.tier) {
       const opts = [
@@ -97,8 +126,21 @@ export function createSettings(actions = {}) {
       }
     }
 
+    // 主题（右下角"切换主题"钮移入于此；直接读 state.theme.name）
+    buildSeg(el.themeSeg, [
+      { v: 'shallow', label: t('theme.shallow') },
+      { v: 'deep', label: t('theme.deep') },
+    ], (o) => theme.name === o.v, (o) => { if (o.v !== theme.name) actions.setTheme && actions.setTheme(o.v); });
+
+    // 语言（EN / 中文）
+    buildSeg(el.langSeg, [
+      { v: 'en', label: 'English' },
+      { v: 'zh', label: '中文' },
+    ], (o) => app.lang === o.v, (o) => { if (o.v !== app.lang) actions.setLang && actions.setLang(o.v); });
+
     if (el.motion) el.motion.classList.toggle('on', !!state.reducedMotion);
     if (el.sound) el.sound.classList.toggle('on', !!state.sound);
+    if (el.daynight) el.daynight.classList.toggle('on', !!dayNight.enabled);
   }
 
   function show() {
@@ -144,6 +186,17 @@ export function createSettings(actions = {}) {
       el.sound.addEventListener('click', toggleSoundRow);
       el.sound.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSoundRow(); }
+      });
+    }
+    // 昼夜循环开关（原右下角 daynight 钮移入于此；状态读 state.dayNight.enabled）
+    if (el.daynight) {
+      const toggleDayNightRow = () => {
+        if (actions.toggleDayNight) actions.toggleDayNight();
+        render();
+      };
+      el.daynight.addEventListener('click', toggleDayNightRow);
+      el.daynight.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDayNightRow(); }
       });
     }
   }
