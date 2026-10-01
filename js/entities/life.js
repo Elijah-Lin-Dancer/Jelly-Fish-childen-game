@@ -807,12 +807,23 @@ const PLAN = {
   child:     { band: 'shallow',   n: 3,  land: false },
   lifebuoy:  { band: 'shallow',   n: 3,  land: false },
   boat:      { band: 'nearshore', n: 3,  land: false },
+  // 【11B 修复】岸上元素往内陆推，让它们明确「站在陆地上」而不是压浪线。
+  //
+  //   ⚠ ahead 有硬上限，且必须与 scenery.js 的 DUNE 对齐：
+  //   - 初始视野里水线以上只有约 290 世界单位（相机顶部 y ≈ -292，水线 y≈0）。
+  //   - scenery.js 的陆地带 DUNE=190，即「水线往上 190」是可见的岸。
+  //   - pushAshore 的 targetDepth = -(60 + ahead*0.7)，是元素**脚底**所在的
+  //     y。脚底要落在 [-DUNE, 0] 内，元素才站在陆地带里、而不是被推进天空。
+  //     所以 ahead 的上限 ≈ (190 - 60) / 0.7 ≈ 185。
+  //   实测：ahead=430 时灯塔/棕榈被推出屏幕，ahead=200 时仍偏高，
+  //   收到 150 以内后脚底深度约 -165，稳稳落在陆地带内。
+  //   层次保持：shell/seagull(贴水边) < pier < umbrella < palm < lighthouse(最内陆)
   seagull:   { band: 'beach',     n: 4,  land: true,  ahead: 40 },
   shell:     { band: 'beach',     n: 6,  land: true,  ahead: 30 },
-  pier:      { band: 'beach',     n: 2,  land: true,  ahead: 20 },
-  umbrella:  { band: 'beach',     n: 4,  land: true,  ahead: 130 },
-  palm:      { band: 'land',      n: 4,  land: true,  ahead: 240 },
-  lighthouse:{ band: 'land',      n: 2,  land: true,  ahead: 320 },
+  pier:      { band: 'beach',     n: 2,  land: true,  ahead: 26 },
+  umbrella:  { band: 'beach',     n: 4,  land: true,  ahead: 95 },
+  palm:      { band: 'land',      n: 4,  land: true,  ahead: 130 },
+  lighthouse:{ band: 'land',      n: 2,  land: true,  ahead: 155 },
 };
 
 const CTORS = {

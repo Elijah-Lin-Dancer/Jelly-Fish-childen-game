@@ -279,47 +279,85 @@ export function createTerrainLayer() {
       ctx.fill();
       ctx.restore();
 
-      // ---------- 2. 岸上陆地 + 沙滩 ----------
+      // ---------- 1.5 天空（水线以上的空气） ----------
+      //
+      // 【11B 修复】水线以上本来是 bg 的暗水色，被当成「陆地/远景」，天地不分。
+      //   这里在水线以上铺一段真正的天空渐变（白天亮蓝、夜晚深蓝，随昼夜插值），
+      //   让「天空 → 陆地 → 海水」三段有明确色相分界。
+      //   多边形上沿一直收到屏幕外，保证相机深入内陆时天空仍然铺满。
+      //   只在有水线的地形画；水线在世界里的 y 由 shoreLineAt 给出。
       ctx.save();
       ctx.beginPath();
-      let landStarted = false;
-      // 记录陆地多边形的实际纵向跨度（屏幕坐标）。
-      // 渐变必须贴着这段真实范围铺，不能写死成 view.H * 0.5 ——
-      // 那样陆地一旦超过半屏，下面的部分就全落在最后一个色标上，
-      // 变成一块毫无层次的纯色矩形（与原水线的沙色割裂，非常突兀）。
-      let landTop = Infinity;
-      let landBot = -Infinity;
+      let s0 = true;
       for (let i = 0; i < cols; i++) {
-        const wx = wxs[i];
-        const sl = tp.shoreLineAt(wx);
-        const sy = (sl - camera.y) * scale;
-        if (sy < landTop) landTop = sy;
-        if (sy > landBot) landBot = sy;
-        if (!landStarted) { ctx.moveTo(sxs[i], sy); landStarted = true; }
+        const sy = (tp.shoreLineAt(wxs[i]) - camera.y) * scale;
+        if (s0) { ctx.moveTo(sxs[i], sy); s0 = false; }
         else ctx.lineTo(sxs[i], sy);
       }
-      // 收口到屏幕顶部
       ctx.lineTo(view.W, -view.H);
       ctx.lineTo(0, -view.H);
       ctx.closePath();
-      // 陆地是「从屏幕顶部一路铺到水线」的一整块。
-      // 渐变端点必须贴合它的真实纵向范围：
-      //   gradBot = 水线所在位置（多边形最低点），
-      //   gradTop = 屏幕顶部（-view.H 是为了在相机深入内陆时也够远）。
-      // 之前写死 view.H * 0.5，导致陆地超过半屏后全落在最后一个色标上，
-      // 变成一块没有层次的纯色矩形。
-      const gradTop = Math.min(landTop, 0) - view.H;
-      const gradBot = Math.max(landBot, 1);
-      const landGrad = ctx.createLinearGradient(0, gradTop, 0, gradBot);
-      // 色标语义：0 = 最内陆（暗），1 = 紧贴水线（亮）。
-      // 暖沙色集中在最后 15% 的窄带里 —— 现实中也是靠水的沙最亮、
-      // 越往内陆越被植被和阴影压暗。若把暖色点铺到 0.5 以上，
-      // 整片陆地会糊成均匀的沙黄，正是之前那种"突兀矩形"的观感。
+      const sun2 = dayNight.sun;
+      // 白天：淡蓝天空；夜晚：深靛蓝。用主题 tint 微调色相靠拢整体风格。
+      const skyTop = `rgba(${Math.round(60 + 120 * sun2)}, ${Math.round(150 + 90 * sun2)}, ${Math.round(210 + 40 * sun2)}, 1)`;
+      const skyBot = `rgba(${Math.round(40 + 70 * sun2)}, ${Math.round(110 + 60 * sun2)}, ${Math.round(170 + 30 * sun2)}, 1)`;
+      const skyGrad = ctx.createLinearGradient(0, -view.H, 0, 0);
+      skyGrad.addColorStop(0, skyTop);
+      skyGrad.addColorStop(1, skyBot);
+      ctx.fillStyle = skyGrad;
+      ctx.fill();
+      ctx.restore();
+
+      // ---------- 2. 岸上陆地 + 沙滩 ----------
+      //
+      // 【11B 修复】陆地只画「水线以上的一段陆地带」，不再从屏幕顶一路铺到水线。
+      //   旧实现把整个上方全填成陆地渐变，于是天上和水下是两种颜色，但
+      //   水线以上那大片区域被当成「陆地」而非「天空」，视觉上天地不分；
+      //   同时 life 元素画在最上层，看起来就像悬浮贴纸，没有站在岸上的感觉。
+      //   现在：陆地收在水线附近一条带内，带以上露出 bg 的天空/远水渐变，
+      //   于是「天空 → 陆地带 → 海水」三段清晰。
+      //
+      //   陆地带厚度用「水线以上抬升到内陆」的视觉高度：取 DUNE 常量，
+      //   与地形无关（地形只决定水线在哪，不决定画面留多少天）。
+      // 陆地带厚度（世界单位）。必须同时容纳：
+      //   ① 元素脚底深度 —— pushAshore 的 targetDepth，最深约 -165（灯塔）
+      //   ② 元素自身高度 —— 灯塔/棕榈约 80
+      //   ③ 上方留一点陆地余量，别让元素顶到天空
+      // 取 300：165 + 80 + 余量 55。上界受「初始可见纵深 ≈ 290」约束，
+      // 天空因此只在水线以上很小的范围里，符合「海为主、岸点缀」的定位。
+      const DUNE = 300;              // 水线以上陆地带的屏幕厚度（世界单位）
       const warm = theme.name === 'shallow';
-      landGrad.addColorStop(0, warm ? 'rgba(58, 62, 58, 1)' : 'rgba(28, 34, 40, 1)');
-      landGrad.addColorStop(0.45, warm ? 'rgba(92, 90, 76, 1)' : 'rgba(58, 62, 64, 1)');
-      landGrad.addColorStop(0.85, warm ? 'rgba(158, 144, 112, 1)' : 'rgba(116, 112, 100, 1)');
-      landGrad.addColorStop(1, warm ? 'rgba(214, 196, 152, 1)' : 'rgba(160, 154, 136, 1)');
+      ctx.save();
+      ctx.beginPath();
+      // 上沿：水线往内陆方向抬 DUNE（屏幕 y 更小），并带一点沙丘起伏
+      let e0 = true;
+      let bandTop = Infinity;
+      let bandBot = -Infinity;
+      for (let i = 0; i < cols; i++) {
+        const wx = wxs[i];
+        const sl = tp.shoreLineAt(wx);
+        // 上沿做一点 fbm 化的起伏，形成沙丘轮廓而不是一条直线
+        const dune = Math.sin(wx * 0.0009 + 1.7) * 26 + Math.sin(wx * 0.0031) * 12;
+        const sy = (sl - camera.y) * scale - DUNE - dune;
+        if (sy < bandTop) bandTop = sy;
+        if (e0) { ctx.moveTo(sxs[i], sy); e0 = false; } else ctx.lineTo(sxs[i], sy);
+      }
+      // 下沿：沿水线回来，与上沿闭合成一条带
+      for (let i = cols - 1; i >= 0; i--) {
+        const sy = (tp.shoreLineAt(wxs[i]) - camera.y) * scale;
+        if (sy > bandBot) bandBot = sy;
+        ctx.lineTo(sxs[i], sy);
+      }
+      ctx.closePath();
+      // 渐变贴着这条带的真实纵向范围铺：
+      //   0 = 上沿（内陆侧，偏暗）→ 1 = 下沿（贴水侧，亮沙）。
+      // 用实测的 bandTop/bandBot 而不是写死值，相机无论如何移动都贴得住。
+      const gradTop = Math.min(bandTop, bandBot) - 8;
+      const gradBot = Math.max(bandBot, gradTop + 1);
+      const landGrad = ctx.createLinearGradient(0, gradTop, 0, gradBot);
+      landGrad.addColorStop(0, warm ? 'rgba(86, 88, 78, 1)' : 'rgba(44, 50, 56, 1)');
+      landGrad.addColorStop(0.55, warm ? 'rgba(150, 140, 110, 1)' : 'rgba(104, 102, 92, 1)');
+      landGrad.addColorStop(1, warm ? 'rgba(226, 208, 164, 1)' : 'rgba(176, 170, 150, 1)');
       ctx.fillStyle = landGrad;
       ctx.fill();
       ctx.restore();
