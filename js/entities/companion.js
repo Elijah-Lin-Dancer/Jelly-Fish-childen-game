@@ -8,6 +8,10 @@
 // ============================================================
 
 import { TAU, rand, clamp } from '../core/config.js';
+import {
+  glow, organicVolume, specular, rimLight, depthLight,
+  signals, makeCache, rgba, shade, LIGHT,
+} from '../render/volume.js';
 
 /** 变体定义：配色 + 花纹 */
 export const COMPANION_VARIANTS = [
@@ -37,6 +41,14 @@ export function companionVariant(id) {
   return COMPANION_VARIANTS.find((v) => v.id === id) || COMPANION_VARIANTS[0];
 }
 
+/** '#RRGGBB' -> 'R,G,B'（volume 库只认三元组） */
+function hexToTriple(hex) {
+  const h = hex.replace('#', '');
+  return parseInt(h.slice(0, 2), 16) + ',' +
+         parseInt(h.slice(2, 4), 16) + ',' +
+         parseInt(h.slice(4, 6), 16);
+}
+
 export class Companion {
   constructor(x, y, { variant = 'lucy' } = {}) {
     this.x = x ?? 0;
@@ -46,6 +58,11 @@ export class Companion {
     this.r = 22;
     this.scale = 0.9;
     this.variant = companionVariant(variant);
+    this.coreRgb = hexToTriple(this.variant.core);
+    this.glowRgb = hexToTriple(this.variant.glow);
+    this.tentRgb = hexToTriple(this.variant.tent);
+    this.accentRgb = hexToTriple(this.variant.accent);
+    this._cache = makeCache();
     this.isCompanion = true;   // 供各系统识别：不参与繁育 / 不被叼走
     this.age = 0;
     this._pulse = rand(0, TAU);
@@ -82,22 +99,36 @@ export class Companion {
     const pulse = 1 + Math.sin(this._pulse) * 0.06;
     const r = this.r * this.scale * pulse;
 
+    // 共享深度协议：与主角水母同一套光照（浅水保色 / 深水偏水色）
+    const dn = signals.depthNorm(this.x, this.y);
+    const L = depthLight(dn);
+
     ctx.save();
     ctx.translate(this.x, this.y);
 
-    // 柔光晕
-    const halo = ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, r * 2.4);
-    halo.addColorStop(0, hexA(v.glow, 0.34));
-    halo.addColorStop(1, hexA(v.glow, 0));
-    ctx.fillStyle = halo;
-    ctx.beginPath();
-    ctx.arc(0, 0, r * 2.4, 0, TAU);
-    ctx.fill();
+    // 柔光晕 —— 共享 glow()（外径与旧版一致 ≈ r*2.4）
+    glow(ctx, 0, 0, r, this.glowRgb, {
+      glow: 0.55,
+      scale: 2.4 / (0.7 + 0.55 * 0.45),
+      cache: this._cache,
+    });
 
-    // 触须
-    ctx.strokeStyle = hexA(v.tent, 0.7);
-    ctx.lineWidth = 1.6;
+    // 触须 —— 沿 LIGHT 方向的渐变（旧版平涂）
     ctx.lineCap = 'round';
+    const tgKey = 'ctg|' + Math.round(r) + '|' + this.tentRgb;
+    let tentGrad = this._cache.get(tgKey);
+    if (!tentGrad) {
+      tentGrad = ctx.createLinearGradient(
+        LIGHT.x * r * 1.4, LIGHT.y * r * 1.4,
+        -LIGHT.x * r * 1.4, -LIGHT.y * r * 1.4
+      );
+      tentGrad.addColorStop(0, rgba(shade(this.tentRgb, 0.3), 0.85));
+      tentGrad.addColorStop(1, rgba(shade(this.tentRgb, -0.3), 0.55));
+      if (this._cache.size > 60) this._cache.clear();
+      this._cache.set(tgKey, tentGrad);
+    }
+    ctx.strokeStyle = tentGrad;
+    ctx.lineWidth = 1.6;
     for (let i = -2; i <= 2; i++) {
       const x = i * (r * 0.34);
       const wob = Math.sin(this.age * 0.004 + i) * 3;
@@ -107,32 +138,27 @@ export class Companion {
       ctx.stroke();
     }
 
-    // 伞盖
-    const g = ctx.createRadialGradient(0, -r * 0.25, r * 0.1, 0, 0, r);
-    g.addColorStop(0, v.accent);
-    g.addColorStop(0.5, v.core);
-    g.addColorStop(1, v.glow);
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, r, r * 0.82, 0, Math.PI, 0);
-    ctx.closePath();
-    ctx.fill();
+    // 伞盖 —— organicVolume（受光方向对齐 LIGHT，与主角同款软体）
+    organicVolume(ctx, 0, 0, r, this.coreRgb, {
+      waves: 5,
+      waveAmp: 0.07,
+      phase: this._pulse * 2,
+      depth: dn,
+      light: L.light,
+      cache: this._cache,
+    });
 
-    // 伞盖边沿
-    ctx.strokeStyle = hexA(v.accent, 0.6);
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, r, r * 0.82, 0, Math.PI, 0);
-    ctx.stroke();
+    // 伞盖边沿 —— 共享 rimLight（左上受光弧）
+    rimLight(ctx, 0, 0, r, this.accentRgb, {
+      from: Math.PI * 1.1, to: Math.PI * 1.9,
+      cy: -0.18, rk: 0.94, width: 1.2, alpha: 0.5,
+    });
 
-    // 花纹
+    // 花纹（身份标识，不动）
     this._drawPattern(ctx, v, r);
 
-    // 高光
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.beginPath();
-    ctx.ellipse(-r * 0.32, -r * 0.28, r * 0.22, r * 0.14, -0.5, 0, TAU);
-    ctx.fill();
+    // 高光 —— 共享 specular
+    specular(ctx, -r * 0.32, -r * 0.28, r * 0.22, r * 0.14, { rot: -0.5, alpha: 0.5 });
 
     ctx.restore();
   }

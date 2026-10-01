@@ -13,7 +13,12 @@
 // ============================================================
 
 import { TAU, rand, clamp, damp } from '../core/config.js';
-import { view, pointer, dayNight } from '../core/state.js';
+import { view, pointer, dayNight, camera, screenToWorld } from '../core/state.js';
+import { WORLD } from '../systems/terrain.js';
+import { rimLight, depthLight, signals, rgba, LIGHT } from '../render/volume.js';
+// 注：camera / WORLD / screenToWorld 此前被本文件使用却未导入（阶段十一
+// 世界坐标改造时漏掉），Bogyó 一进 idle 划水分支就会 ReferenceError。
+// 这里是修复，不是新依赖。
 
 const PERIOD = 16.667;
 
@@ -283,6 +288,10 @@ export class Bogyo {
     const r = this.r * this.scale;
     const p = this.palette;
 
+    // 期三：共享深度协议。他不偏水色（毛色是身份），只用深度调受光强弱。
+    const dn = signals.depthNorm(this.x, this.y);
+    const L = depthLight(dn);
+
     this._drawAura(ctx, r, night);
     this._drawSparks(ctx);
 
@@ -296,16 +305,16 @@ export class Bogyo {
     ctx.rotate(clamp(this.vx * 0.02, -0.12, 0.12) + (napping ? -0.06 : 0));
 
     // 尾巴（浣熊环纹），画在身体后面
-    this._drawTail(ctx, r, napping);
+    this._drawTail(ctx, r, napping, L.light);
 
     // 四条小短腿（划水）
     this._drawLegs(ctx, r, napping);
 
     // 身体 + 猫脸
-    this._drawBody(ctx, r, p, night, napping);
+    this._drawBody(ctx, r, p, night, napping, L.light);
 
     // 头（含耳朵 / 胡须 / 舌头 / 眼）
-    this._drawHead(ctx, r, p, night, napping);
+    this._drawHead(ctx, r, p, night, napping, L.light);
 
     ctx.restore();
   }
@@ -352,7 +361,7 @@ export class Bogyo {
   }
 
   /** 浣熊环纹长尾 */
-  _drawTail(ctx, r, napping) {
+  _drawTail(ctx, r, napping, strength = 1) {
     const wag = Math.sin(this.age * (napping ? 0.0008 : 0.0022)) * (napping ? 0.1 : 0.32);
     const curl = napping ? 0.9 : 0.4;      // 打盹时尾巴圈起来
     const len = r * (napping ? 1.1 : 1.7);
@@ -394,6 +403,15 @@ export class Bogyo {
       ctx.lineTo(q[0] + 0.5, q[1] + 0.5);
       ctx.stroke();
     }
+    // 期三：受光边 —— 尾身朝 LIGHT 偏移叠一条亮线（lighter）
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = rgba('255,236,205', 0.15 * strength);
+    ctx.lineWidth = r * 0.12;
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0] + LIGHT.x * r * 0.12, pts[0][1] + LIGHT.y * r * 0.12);
+    for (const q of pts) ctx.lineTo(q[0] + LIGHT.x * r * 0.12, q[1] + LIGHT.y * r * 0.12);
+    ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
     ctx.restore();
   }
 
@@ -435,7 +453,7 @@ export class Bogyo {
   }
 
   /** 猫身 + 猫脸 */
-  _drawBody(ctx, r, p, night, napping) {
+  _drawBody(ctx, r, p, night, napping, strength = 1) {
     // 身体：圆润的猫身（比水母伞盖更"实"），上橘下白
     const bodyG = ctx.createLinearGradient(0, -r * 0.9, 0, r * 0.7);
     bodyG.addColorStop(0, p.core);
@@ -463,10 +481,45 @@ export class Bogyo {
     ctx.ellipse(0, r * 0.05, r * 0.98, r * 0.82, 0, 0, TAU);
     ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
+
+    // 期三：身体吃同一套光（左上受光 / 右下微暗 / 顶缘亮边）
+    this._drawSharedLight(ctx, 0, r * 0.05, r * 0.98, r * 0.82, strength, '255,238,210', LIGHT.x, LIGHT.y);
+  }
+
+  /**
+   * 期三：共享光照通行证 —— 在椭圆区域内做「左上提亮 / 右下压暗 / 左上顶缘亮边」。
+   * Bogyó 的毛色是身份（不随深度偏水色），这里只调制"受多少光"。
+   * lx/ly 是光向量：头会歪，所以头部调用时传入旋回局部坐标的光向量。
+   */
+  _drawSharedLight(ctx, cx, cy, rx, ry, strength, tint, lx, ly) {
+    const r = Math.max(rx, ry);
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, TAU);
+    ctx.clip();
+    const gx = lx * r * 0.7, gy = ly * r * 0.7;
+    ctx.globalCompositeOperation = 'lighter';
+    let g = ctx.createRadialGradient(gx, gy, 0, gx, gy, r * 1.5);
+    g.addColorStop(0, rgba(tint, 0.15 * strength));
+    g.addColorStop(1, rgba(tint, 0));
+    ctx.fillStyle = g;
+    ctx.fillRect(cx - rx, cy - ry, rx * 2, ry * 2);
+    ctx.globalCompositeOperation = 'source-over';
+    g = ctx.createRadialGradient(-gx, -gy, 0, -gx, -gy, r * 1.35);
+    g.addColorStop(0, 'rgba(16,22,40,' + (0.12 * strength) + ')');
+    g.addColorStop(1, 'rgba(16,22,40,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(cx - rx, cy - ry, rx * 2, ry * 2);
+    ctx.restore();
+    rimLight(ctx, cx, cy, rx, tint, {
+      ry: ry / rx, rk: 0.97, cy: 0,
+      from: Math.PI * 1.02, to: Math.PI * 1.72,
+      alpha: 0.24 * strength, width: 1.3,
+    });
   }
 
   /** 头：耳朵 / 眼 / 鼻 / 胡须 / 舌头 */
-  _drawHead(ctx, r, p, night, napping) {
+  _drawHead(ctx, r, p, night, napping, strength = 1) {
     const hy = -r * 0.62;
     const tilt = this.headTiltCur;
 
@@ -501,6 +554,14 @@ export class Bogyo {
     ctx.beginPath();
     ctx.ellipse(0, -hr * 0.62, hr * 0.34, hr * 0.5, 0, 0, TAU);
     ctx.fill();
+
+    // 期三：头部也吃同一套光（头会歪，光向量旋回头部局部坐标）
+    {
+      const ca = Math.cos(-tilt), sa = Math.sin(-tilt);
+      const lx = LIGHT.x * ca - LIGHT.y * sa;
+      const ly = LIGHT.x * sa + LIGHT.y * ca;
+      this._drawSharedLight(ctx, 0, 0, hr, hr * 0.92, strength, '255,238,210', lx, ly);
+    }
 
     // --- 胡须 ---
     this._drawWhiskers(ctx, hr, napping);
