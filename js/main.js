@@ -203,11 +203,14 @@ const terrain = {
   depthAt(x, y) { return terrainRef.current.depthAt(x, y); },
   zoneAt(x, y) { return terrainRef.current.zoneAt(x, y); },
   shoreLineAt(x) { return terrainRef.current.shoreLineAt(x); },
+  landRearAt(x) { return terrainRef.current.landRearAt(x); },
   surfaceAt(x) { return terrainRef.current.surfaceAt(x); },
   landHeightAt(x, y) { return terrainRef.current.landHeightAt(x, y); },
   temperatureAt(x) { return terrainRef.current.temperatureAt(x); },
   isLand(x, y) { return terrainRef.current.isLand(x, y); },
+  insideLandRegion(x, y) { return terrainRef.current.insideLandRegion(x, y); },
   samplePoint(b, r) { return terrainRef.current.samplePoint(b, r); },
+  sampleLandPoint(r, m) { return terrainRef.current.sampleLandPoint(r, m); },
   homePoint() { return terrainRef.current.homePoint(); },
 };
 
@@ -230,6 +233,8 @@ if (typeof window !== 'undefined') {
     get terrainSeed() { return terrainRef.current.seedStr; },
     bandAt(x, y) { const b = bandOf(terrainRef.current.depthAt(x, y)); return { id: b.id, key: b.key }; },
     depthAt(x, y) { return terrainRef.current.depthAt(x, y); },
+    landRear(x) { return terrainRef.current.landRearAt(x); },
+    insideLandRegion(x, y) { return terrainRef.current.insideLandRegion(x, y); },
     get home() { return terrainRef.current.homePoint(); },
     /** 生命元素：数量 / 类型分布 / 世界坐标（测试与调试用） */
     get life() {

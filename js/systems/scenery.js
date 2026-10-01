@@ -279,88 +279,140 @@ export function createTerrainLayer() {
       ctx.fill();
       ctx.restore();
 
-      // ---------- 1.5 天空（水线以上的空气） ----------
+      // ---------- 1.5~2. 天空 / 远景山脊 / 近景陆地 ----------
       //
-      // 【11B 修复】水线以上本来是 bg 的暗水色，被当成「陆地/远景」，天地不分。
-      //   这里在水线以上铺一段真正的天空渐变（白天亮蓝、夜晚深蓝，随昼夜插值），
-      //   让「天空 → 陆地 → 海水」三段有明确色相分界。
-      //   多边形上沿一直收到屏幕外，保证相机深入内陆时天空仍然铺满。
-      //   只在有水线的地形画；水线在世界里的 y 由 shoreLineAt 给出。
-      ctx.save();
-      ctx.beginPath();
-      let s0 = true;
-      for (let i = 0; i < cols; i++) {
-        const sy = (tp.shoreLineAt(wxs[i]) - camera.y) * scale;
-        if (s0) { ctx.moveTo(sxs[i], sy); s0 = false; }
-        else ctx.lineTo(sxs[i], sy);
-      }
-      ctx.lineTo(view.W, -view.H);
-      ctx.lineTo(0, -view.H);
-      ctx.closePath();
-      const sun2 = dayNight.sun;
-      // 白天：淡蓝天空；夜晚：深靛蓝。用主题 tint 微调色相靠拢整体风格。
-      const skyTop = `rgba(${Math.round(60 + 120 * sun2)}, ${Math.round(150 + 90 * sun2)}, ${Math.round(210 + 40 * sun2)}, 1)`;
-      const skyBot = `rgba(${Math.round(40 + 70 * sun2)}, ${Math.round(110 + 60 * sun2)}, ${Math.round(170 + 30 * sun2)}, 1)`;
-      const skyGrad = ctx.createLinearGradient(0, -view.H, 0, 0);
-      skyGrad.addColorStop(0, skyTop);
-      skyGrad.addColorStop(1, skyBot);
-      ctx.fillStyle = skyGrad;
-      ctx.fill();
-      ctx.restore();
-
-      // ---------- 2. 岸上陆地 + 沙滩 ----------
-      //
-      // 【11B 修复】陆地只画「水线以上的一段陆地带」，不再从屏幕顶一路铺到水线。
-      //   旧实现把整个上方全填成陆地渐变，于是天上和水下是两种颜色，但
-      //   水线以上那大片区域被当成「陆地」而非「天空」，视觉上天地不分；
-      //   同时 life 元素画在最上层，看起来就像悬浮贴纸，没有站在岸上的感觉。
-      //   现在：陆地收在水线附近一条带内，带以上露出 bg 的天空/远水渐变，
-      //   于是「天空 → 陆地带 → 海水」三段清晰。
-      //
-      //   陆地带厚度用「水线以上抬升到内陆」的视觉高度：取 DUNE 常量，
-      //   与地形无关（地形只决定水线在哪，不决定画面留多少天）。
-      // 陆地带厚度（世界单位）。必须同时容纳：
-      //   ① 元素脚底深度 —— pushAshore 的 targetDepth，最深约 -165（灯塔）
-      //   ② 元素自身高度 —— 灯塔/棕榈约 80
-      //   ③ 上方留一点陆地余量，别让元素顶到天空
-      // 取 300：165 + 80 + 余量 55。上界受「初始可见纵深 ≈ 290」约束，
-      // 天空因此只在水线以上很小的范围里，符合「海为主、岸点缀」的定位。
-      const DUNE = 300;              // 水线以上陆地带的屏幕厚度（世界单位）
+      // 【陆地区域模型】shore 的陆地从「水线函数」重构为「有实体纵深的区域」，
+      //   分层（从上到下 = 从远到近）：
+      //     天空 → 远景山脊 → 近景陆地（高地 + 沙滩）→ 水线 → 海
+      //   陆地上边界 = landRearAt（内陆界），下边界 = shoreLineAt（水线）。
+      //   island / slope 本期保持旧渲染（天空铺到水线 + 一段沙丘带），零回归。
       const warm = theme.name === 'shallow';
-      ctx.save();
-      ctx.beginPath();
-      // 上沿：水线往内陆方向抬 DUNE（屏幕 y 更小），并带一点沙丘起伏
-      let e0 = true;
-      let bandTop = Infinity;
-      let bandBot = -Infinity;
-      for (let i = 0; i < cols; i++) {
-        const wx = wxs[i];
-        const sl = tp.shoreLineAt(wx);
-        // 上沿做一点 fbm 化的起伏，形成沙丘轮廓而不是一条直线
-        const dune = Math.sin(wx * 0.0009 + 1.7) * 26 + Math.sin(wx * 0.0031) * 12;
-        const sy = (sl - camera.y) * scale - DUNE - dune;
-        if (sy < bandTop) bandTop = sy;
-        if (e0) { ctx.moveTo(sxs[i], sy); e0 = false; } else ctx.lineTo(sxs[i], sy);
+      const sun2 = dayNight.sun;
+      const isShore = tp.type === 'shore';
+
+      if (isShore) {
+        // —— 天空（铺到远景山脊上沿）——
+        const RIDGE = 260;            // 远景山脊的纵深（世界单位）
+        ctx.save();
+        ctx.beginPath();
+        let k0 = true;
+        for (let i = 0; i < cols; i++) {
+          const sy = (tp.landRearAt(wxs[i]) - RIDGE - camera.y) * scale;
+          if (k0) { ctx.moveTo(sxs[i], sy); k0 = false; } else ctx.lineTo(sxs[i], sy);
+        }
+        ctx.lineTo(view.W, -view.H);
+        ctx.lineTo(0, -view.H);
+        ctx.closePath();
+        const skyTop = `rgba(${Math.round(60 + 120 * sun2)}, ${Math.round(150 + 90 * sun2)}, ${Math.round(210 + 40 * sun2)}, 1)`;
+        const skyBot = `rgba(${Math.round(40 + 70 * sun2)}, ${Math.round(110 + 60 * sun2)}, ${Math.round(170 + 30 * sun2)}, 1)`;
+        const skyGrad = ctx.createLinearGradient(0, -view.H, 0, view.H * 0.4);
+        skyGrad.addColorStop(0, skyTop);
+        skyGrad.addColorStop(1, skyBot);
+        ctx.fillStyle = skyGrad;
+        ctx.fill();
+        ctx.restore();
+
+        // —— 远景山脊（半透明灰蓝剪影，带山形起伏）——
+        ctx.save();
+        ctx.beginPath();
+        let r0 = true;
+        for (let i = 0; i < cols; i++) {
+          const wx = wxs[i];
+          const ridge = Math.sin(wx * 0.0006 + 2.1) * 70 + Math.sin(wx * 0.0019 + 0.6) * 34;
+          const sy = (tp.landRearAt(wx) - RIDGE - ridge - camera.y) * scale;
+          if (r0) { ctx.moveTo(sxs[i], sy); r0 = false; } else ctx.lineTo(sxs[i], sy);
+        }
+        for (let i = cols - 1; i >= 0; i--) {
+          const sy = (tp.landRearAt(wxs[i]) - camera.y) * scale;
+          ctx.lineTo(sxs[i], sy);
+        }
+        ctx.closePath();
+        const ridgeGrad = ctx.createLinearGradient(0, -view.H, 0, view.H * 0.6);
+        ridgeGrad.addColorStop(0, warm ? 'rgba(96, 108, 118, 0.55)' : 'rgba(52, 64, 80, 0.6)');
+        ridgeGrad.addColorStop(1, warm ? 'rgba(140, 132, 108, 0.32)' : 'rgba(96, 96, 92, 0.4)');
+        ctx.fillStyle = ridgeGrad;
+        ctx.fill();
+        ctx.restore();
+
+        // —— 近景陆地（高地 + 沙滩；体积渐变：内陆暗、临水亮）——
+        ctx.save();
+        ctx.beginPath();
+        let e0 = true;
+        let bandTop = Infinity;
+        let bandBot = -Infinity;
+        for (let i = 0; i < cols; i++) {
+          const wx = wxs[i];
+          const sy = (tp.landRearAt(wx) - camera.y) * scale;
+          if (sy < bandTop) bandTop = sy;
+          if (e0) { ctx.moveTo(sxs[i], sy); e0 = false; } else ctx.lineTo(sxs[i], sy);
+        }
+        for (let i = cols - 1; i >= 0; i--) {
+          const sy = (tp.shoreLineAt(wxs[i]) - camera.y) * scale;
+          if (sy > bandBot) bandBot = sy;
+          ctx.lineTo(sxs[i], sy);
+        }
+        ctx.closePath();
+        const gradTop = Math.min(bandTop, bandBot) - 8;
+        const gradBot = Math.max(bandBot, gradTop + 1);
+        const landGrad = ctx.createLinearGradient(0, gradTop, 0, gradBot);
+        landGrad.addColorStop(0, warm ? 'rgba(74, 82, 70, 1)' : 'rgba(46, 52, 58, 1)');
+        landGrad.addColorStop(0.6, warm ? 'rgba(126, 118, 94, 1)' : 'rgba(88, 86, 78, 1)');
+        landGrad.addColorStop(0.85, warm ? 'rgba(178, 162, 128, 1)' : 'rgba(130, 124, 108, 1)');
+        landGrad.addColorStop(1, warm ? 'rgba(228, 210, 166, 1)' : 'rgba(178, 172, 152, 1)');
+        ctx.fillStyle = landGrad;
+        ctx.fill();
+        ctx.restore();
+      } else {
+        // island / slope：旧渲染（天空铺到水线 + DUNE 沙丘带）—— 本期不重构
+        ctx.save();
+        ctx.beginPath();
+        let s0 = true;
+        for (let i = 0; i < cols; i++) {
+          const sy = (tp.shoreLineAt(wxs[i]) - camera.y) * scale;
+          if (s0) { ctx.moveTo(sxs[i], sy); s0 = false; }
+          else ctx.lineTo(sxs[i], sy);
+        }
+        ctx.lineTo(view.W, -view.H);
+        ctx.lineTo(0, -view.H);
+        ctx.closePath();
+        const skyTop = `rgba(${Math.round(60 + 120 * sun2)}, ${Math.round(150 + 90 * sun2)}, ${Math.round(210 + 40 * sun2)}, 1)`;
+        const skyBot = `rgba(${Math.round(40 + 70 * sun2)}, ${Math.round(110 + 60 * sun2)}, ${Math.round(170 + 30 * sun2)}, 1)`;
+        const skyGrad = ctx.createLinearGradient(0, -view.H, 0, 0);
+        skyGrad.addColorStop(0, skyTop);
+        skyGrad.addColorStop(1, skyBot);
+        ctx.fillStyle = skyGrad;
+        ctx.fill();
+        ctx.restore();
+
+        const DUNE = 300;
+        ctx.save();
+        ctx.beginPath();
+        let e0 = true;
+        let bandTop = Infinity;
+        let bandBot = -Infinity;
+        for (let i = 0; i < cols; i++) {
+          const wx = wxs[i];
+          const dune = Math.sin(wx * 0.0009 + 1.7) * 26 + Math.sin(wx * 0.0031) * 12;
+          const sy = (tp.shoreLineAt(wx) - camera.y) * scale - DUNE - dune;
+          if (sy < bandTop) bandTop = sy;
+          if (e0) { ctx.moveTo(sxs[i], sy); e0 = false; } else ctx.lineTo(sxs[i], sy);
+        }
+        for (let i = cols - 1; i >= 0; i--) {
+          const sy = (tp.shoreLineAt(wxs[i]) - camera.y) * scale;
+          if (sy > bandBot) bandBot = sy;
+          ctx.lineTo(sxs[i], sy);
+        }
+        ctx.closePath();
+        const gradTop = Math.min(bandTop, bandBot) - 8;
+        const gradBot = Math.max(bandBot, gradTop + 1);
+        const landGrad = ctx.createLinearGradient(0, gradTop, 0, gradBot);
+        landGrad.addColorStop(0, warm ? 'rgba(86, 88, 78, 1)' : 'rgba(44, 50, 56, 1)');
+        landGrad.addColorStop(0.55, warm ? 'rgba(150, 140, 110, 1)' : 'rgba(104, 102, 92, 1)');
+        landGrad.addColorStop(1, warm ? 'rgba(226, 208, 164, 1)' : 'rgba(176, 170, 150, 1)');
+        ctx.fillStyle = landGrad;
+        ctx.fill();
+        ctx.restore();
       }
-      // 下沿：沿水线回来，与上沿闭合成一条带
-      for (let i = cols - 1; i >= 0; i--) {
-        const sy = (tp.shoreLineAt(wxs[i]) - camera.y) * scale;
-        if (sy > bandBot) bandBot = sy;
-        ctx.lineTo(sxs[i], sy);
-      }
-      ctx.closePath();
-      // 渐变贴着这条带的真实纵向范围铺：
-      //   0 = 上沿（内陆侧，偏暗）→ 1 = 下沿（贴水侧，亮沙）。
-      // 用实测的 bandTop/bandBot 而不是写死值，相机无论如何移动都贴得住。
-      const gradTop = Math.min(bandTop, bandBot) - 8;
-      const gradBot = Math.max(bandBot, gradTop + 1);
-      const landGrad = ctx.createLinearGradient(0, gradTop, 0, gradBot);
-      landGrad.addColorStop(0, warm ? 'rgba(86, 88, 78, 1)' : 'rgba(44, 50, 56, 1)');
-      landGrad.addColorStop(0.55, warm ? 'rgba(150, 140, 110, 1)' : 'rgba(104, 102, 92, 1)');
-      landGrad.addColorStop(1, warm ? 'rgba(226, 208, 164, 1)' : 'rgba(176, 170, 150, 1)');
-      ctx.fillStyle = landGrad;
-      ctx.fill();
-      ctx.restore();
 
       // ---------- 3. 水线（白色浪花细线）----------
       ctx.save();

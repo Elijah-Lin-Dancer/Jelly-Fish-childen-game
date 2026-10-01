@@ -184,6 +184,12 @@ export function createTerrain(opts = {}) {
   // 沿岸滩涂宽度（陆上高度跨度）
   p.beachW = rangeFrom(rng, 95, 170);
 
+  // 近景陆地带的纵深（「可站立区」的高度）。它不改变 isLand/depthAt 的语义，
+  // 只划定一块「元素可以站在上面」的近景陆地 —— 这就是「陆地区域」模型。
+  // 取 650~850：场景可以上下平移，所以不纠结首屏占比，重点是给足纵深、
+  // 让人造物（灯塔/棕榈/伞）有明确的「站在陆地上」而非「贴水线」。
+  p.landDepth = rangeFrom(rng, 650, 850);
+
   // shore 专用：水线基高
   p.shoreY = rangeFrom(rng, -48, 72);
 
@@ -257,6 +263,50 @@ export function createTerrain(opts = {}) {
     // 上限 400：沙滩段(~170) + 内陆段(170) + 起伏(40) 的合理上界。
     // 不再用 240 —— 那会把内陆段压平，正是上面说的「空白平台」。
     return clamp(Math.max(0, h + back + dune), 0, 400);
+  }
+
+  // 内陆界（近景可站立带的「上沿」，即远离水线的那一端）。
+  // 之外是远景山脊/雾，不再是可站立的近景陆地。
+  // 沿 x 做缓慢起伏 + fbm，避免一条死直边。
+  function landRearAt(x) {
+    if (type === 'island') return p.islY - p.islR;      // 岛不用这条线（岛是环形）
+    const wob =
+      Math.sin(x * 0.0009 + p.nPhase) * 60 +
+      fbm1(x * 0.0013 + p.nPhase * 3.1, 3) * 90;
+    return shoreLineAt(x) - p.landDepth + wob;
+  }
+
+  // 【陆地区域判据】点是否落在「近景可站立陆地」内。
+  // 与 isLand 的区别：
+  //   isLand(x,y) = depthAt < 0 —— 沿 y 的一维判据，表示「在水线上方」；
+  //   insideLandRegion —— 二维判据，表示「在水线与内陆界之间的陆地带内」。
+  // 元素归属用后者：落在这个带里，就天然站在实体陆地上、不会贴水线，
+  // 也不会随相机移动而「进海」（坐标是固定的世界几何）。
+  function insideLandRegion(x, y) {
+    if (type === 'island') return islandInside(x, y) !== null;   // 岛本来就是区域
+    if (type === 'slope') return y < shoreLineAt(x);             // 本期保留旧语义
+    return y <= shoreLineAt(x) && y >= landRearAt(x);            // shore：夹在两界之间
+  }
+
+  // 在近景陆地带内采样一个点（保证落在区域内，不是「推」过去的）。
+  // fromWater：元素离水线的最小距离（决定「贴水边」还是「靠内陆」的层次）；
+  // spread：在该距离之上再往内陆散布的宽度。两者都保证不越过内陆界 landRearAt。
+  function sampleLandPoint(rngFn, fromWater = 60, spread = 70) {
+    const r = rngFn || rng;
+    for (let i = 0; i < 80; i++) {
+      const x = rangeFrom(r, WORLD.x0 + 140, WORLD.x1 - 140);
+      const sl = shoreLineAt(x);
+      const rear = landRearAt(x);
+      const yMax = sl - fromWater;             // 最贴水的一端
+      const yMin = sl - fromWater - spread;    // 最内陆的一端
+      if (yMin < rear) continue;               // 这一列装不下，换一列
+      const y = rangeFrom(r, yMin, yMax);
+      if (insideLandRegion(x, y)) return { x, y, depth: depthAt(x, y) };
+    }
+    // 兜底：退回构图锚点附近、水线内侧一段（一定在区域内）
+    const x = WORLD.x0 + WORLD.w * 0.42;
+    const y = shoreLineAt(x) - fromWater - spread * 0.5;
+    return { x, y, depth: depthAt(x, y) };
   }
 
   // —— 浅水剖面：水线处 depth = 0，往外平滑加深，最终饱和到 MAX_DEPTH ——
@@ -411,7 +461,10 @@ export function createTerrain(opts = {}) {
     seedStr: opts.seed == null || opts.seed === '' ? 'shore' : String(opts.seed),
     params: p,
     shoreLineAt,
+    landRearAt,
     landHeightAt,
+    insideLandRegion,
+    sampleLandPoint,
     depthAt,
     zoneAt,
     surfaceAt,

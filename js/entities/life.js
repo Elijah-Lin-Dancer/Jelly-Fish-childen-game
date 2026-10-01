@@ -797,33 +797,25 @@ export class Pier {
 // ============================================================
 
 // 每类元素的「带偏好」与数量。数量会按 quality 分级缩水。
-//  land:true 表示「岸上元素」—— 采样后要吸附到水线以上的陆地（见 pushAshore）。
-//  ahead 决定它站在岸上的纵深层次：值越大越靠内陆。
-//  世界为竖屏预留了很长的陆地纵深（WORLD.y0 = -1100），pushAshore 会按
-//  ahead 的比例继续往内陆推进，所以数值要拉开档次，否则所有元素会挤在
-//  水线附近的一条窄带里（见 pushAshore 里「深入内陆」那段的说明）。
+//  land:true 表示「岸上元素」—— 采样后要站在近景陆地区域内（见
+//  terrain.sampleLandPoint / pushAshore），而不是水面里。
+//  fromWater 决定它离水线的层次：值越大越靠内陆。
+//  层次保持：shell(贴水边) < pier/seagull < umbrella < palm < lighthouse(最内陆)。
 const PLAN = {
   swimmer:   { band: 'shallow',   n: 5,  land: false },
   child:     { band: 'shallow',   n: 3,  land: false },
   lifebuoy:  { band: 'shallow',   n: 3,  land: false },
   boat:      { band: 'nearshore', n: 3,  land: false },
-  // 【11B 修复】岸上元素往内陆推，让它们明确「站在陆地上」而不是压浪线。
-  //
-  //   ⚠ ahead 有硬上限，且必须与 scenery.js 的 DUNE 对齐：
-  //   - 初始视野里水线以上只有约 290 世界单位（相机顶部 y ≈ -292，水线 y≈0）。
-  //   - scenery.js 的陆地带 DUNE=190，即「水线往上 190」是可见的岸。
-  //   - pushAshore 的 targetDepth = -(60 + ahead*0.7)，是元素**脚底**所在的
-  //     y。脚底要落在 [-DUNE, 0] 内，元素才站在陆地带里、而不是被推进天空。
-  //     所以 ahead 的上限 ≈ (190 - 60) / 0.7 ≈ 185。
-  //   实测：ahead=430 时灯塔/棕榈被推出屏幕，ahead=200 时仍偏高，
-  //   收到 150 以内后脚底深度约 -165，稳稳落在陆地带内。
-  //   层次保持：shell/seagull(贴水边) < pier < umbrella < palm < lighthouse(最内陆)
-  seagull:   { band: 'beach',     n: 4,  land: true,  ahead: 40 },
-  shell:     { band: 'beach',     n: 6,  land: true,  ahead: 30 },
-  pier:      { band: 'beach',     n: 2,  land: true,  ahead: 26 },
-  umbrella:  { band: 'beach',     n: 4,  land: true,  ahead: 95 },
-  palm:      { band: 'land',      n: 4,  land: true,  ahead: 130 },
-  lighthouse:{ band: 'land',      n: 2,  land: true,  ahead: 155 },
+  // 【陆地区域模型】fromWater = 元素脚底离水线的最小距离（世界单位）。
+  //   shore 走 terrain.sampleLandPoint(x, fromWater, spread) —— 在陆地带内采样，
+  //   天然站在实体陆地上；slope 暂沿用 pushAshore（用 fromWater 作为纵深）。
+  //   上限由 landDepth(650~850) 约束，这些值都远小于它，不会推出区域。
+  seagull:   { band: 'beach',     n: 4,  land: true,  fromWater: 45 },
+  shell:     { band: 'beach',     n: 6,  land: true,  fromWater: 30 },
+  pier:      { band: 'beach',     n: 2,  land: true,  fromWater: 35 },
+  umbrella:  { band: 'beach',     n: 4,  land: true,  fromWater: 120 },
+  palm:      { band: 'land',      n: 4,  land: true,  fromWater: 170 },
+  lighthouse:{ band: 'land',      n: 2,  land: true,  fromWater: 215 },
 };
 
 const CTORS = {
@@ -998,15 +990,27 @@ export function createLife(terrain, seed, density = 1) {
         // 岛心必定是陆地（dome 最高处），最后的兜底
         if (!got) got = { x: cx, y: cy };
         x = got.x;
-        y = got.y;      } else {
+        y = got.y;      } else if (cfg.land && terrain.type === 'shore') {
+        // 【陆地区域模型】shore 的岸上元素直接在近景陆地带内采样。
+        // 不再「先采浅水带、再往内陆推」——那样依赖水线法向，岸线一弯就
+        // 失真，元素会掉进海里。区域内采样让元素天然站在实体陆地上，
+        // 与相机移动、岸线弯曲完全无关。
+        const lp = terrain.sampleLandPoint(rng, cfg.fromWater, 70);
+        if (lp && Number.isFinite(lp.x) && Number.isFinite(lp.y)) {
+          x = lp.x;
+          y = lp.y;
+        } else {
+          continue;
+        }
+      } else {
         const p = terrain.samplePoint(cfg.band, rng);
         if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
         // 同一带内多个元素容易叠在一起，加一点确定性抖动错开
         x = p.x + rangeFrom(rng, -60, 60);
         y = p.y + rangeFrom(rng, -26, 26);
-        // 岸上元素吸附到水线以上的陆地，避免"贝壳长在水里"
+        // slope 等其它地形的岸上元素：仍沿用 pushAshore（本期只重构 shore）
         if (cfg.land) {
-          const a = pushAshore(terrain, x, y, cfg.ahead || 90);
+          const a = pushAshore(terrain, x, y, cfg.fromWater || 90);
           x = a.x;
           y = a.y;
         }
