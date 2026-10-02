@@ -1,8 +1,8 @@
 // ============================================================
 //  WebAudio · Phase 9 真实音频（加载 .wav + 事件分发）
 //  - 背景乐：assets/audio/music_loop.wav（生成式 pad，无缝循环）
-//  - 事件音效：sfx_tap / breed / feed / build / remove / snatch /
-//              unlock / mode / nuzzle
+//  - 事件音效（12 种）：sfx_tap / breed / feed / build / remove / snatch /
+//              unlock / mode / nuzzle / seagull / horn / splash
 //  - 昼夜 + 模式联动：改变循环速率 / 低通 / 音量
 //  - 全部失败静默降级，绝不让音频崩游戏
 // ============================================================

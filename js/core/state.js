@@ -14,7 +14,7 @@ export const pointer = { x: -9999, y: -9999, active: false, down: false };
 //  相机（Phase 11 开放世界）
 // ------------------------------------------------------------
 //  世界坐标 → 屏幕坐标： screen = (world - camera) * scale
-//  世界尺寸固定 6000 × 1600，做法是「把世界当视口铺满」——
+//  世界尺寸 3200 × 4000（见 terrain.js 的 WORLD），做法是「把世界当视口铺满」——
 //  scale = max(view.W / WORLD.w, view.H / WORLD.h)，保证世界永远填满窗口、
 //  不露黑边；相机被夹在 [0, WORLD.w - view.W/scale] 内。
 //  这样地形的所有常数都与分辨率无关，手机 / 桌面得到的是同一个世界。

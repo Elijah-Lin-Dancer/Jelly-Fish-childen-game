@@ -183,7 +183,7 @@
 | 阶段八 A | 双模式 + 建造轴：和平/冒险自选 + 珊瑚工坊 | ✅ 已完成 | `systems/mode.js`、`systems/build.js`、`ui/buildPad.js`、`ui/modeSelect.js` |
 | 阶段八 B | 冒险成长轴：吃→长大 + 缺氧休眠 + 大鱼调凶 | ✅ 已完成 | 复用 `entities/bigfish.js`、`entities/jellyfish.js`、`systems/ecosystem.js` |
 | 隐藏内容 | Bogyó · 隐藏猫猫水母（口令解锁，私人） | ✅ 已完成 | `js/memory.config.js`、`gameplay/memory.js`、`ui/memoryPad.js`、`entities/bogyo.js` |
-| 阶段九 | 自适应音频：生成式背景乐 + 事件音效 | ✅ 已完成 | `js/core/audio.js`（重写）、`assets/audio/*.wav`（10 个真实音频文件） |
+| 阶段九 | 自适应音频：生成式背景乐 + 事件音效 | ✅ 已完成 | `js/core/audio.js`（重写）、`assets/audio/*.wav`（13 个真实音频文件：1 背景乐 + 12 事件音效） |
 | 阶段十 | 向「我的世界」看齐：标题屏 + 新建世界 + 5 群系 + 种子 + 伴随水母 | ✅ 已完成 | `js/systems/worlds.js`、`js/core/seed.js`、`js/entities/companion.js`、`js/ui/createWorld.js`、`js/ui/home.js`（重构为标题屏） |
 | 阶段十一 | 开放世界（含海岸带）：可移动相机 + 陆到深渊水深梯度 + 移动端摇杆 | ✅ 已完成 | `js/systems/terrain.js`、`js/systems/camera.js`、`js/entities/life.js`、`js/ui/touchPad.js` |
 | 后续打磨 | 暂停菜单（Esc / ⏸ → 继续 / 设置 / 保存回标题）、生物密度可调、坐标锚定与尺寸校准 | ✅ 已完成 | `js/ui/pause.js`、`js/core/config.js`、`js/ui/settings.js`、`js/ui/createWorld.js` |
@@ -204,7 +204,7 @@
 - **冒险成长轴**（阶段八 B）：冒险模式下喂食浮游使水母持续长大；深海（微光 / 深渊）耗氧，缺氧归零则休眠沉底、返回浅海自动苏醒；大鱼化为掠食者（暗红 + 利齿），会叼走一只水母（中档失败，优先保护稀有 / 杂交个体，礁石庇护范围内安全）；和平模式一切照旧温和。
 - **矢量图标**（阶段七后修）：HUD 全部改用内联 SVG，去除对 emoji 字体的依赖（此前无字体环境会渲染成空方块）。
 - **隐藏纪念内容**：设置面板标题连点 5 次浮出口令框，口令正确后一只名为 **Bogyó** 的橘白猫猫水母常驻海洋（歪耳 / 吐舌 / 浣熊环纹尾），并浮现一段匈牙利语微型故事。口令只存 SHA-256 摘要，明文不入库；内容文案集中在 `js/memory.config.js`，改字不碰逻辑。
-- **Phase 9 自适应音频**：背景乐从「两层固定正弦 drone」升级为 `assets/audio/music_loop.wav` 生成式 pad（C 大调五声音阶、缓慢呼吸、随机钟琴点缀，16s 无缝循环），并随昼夜（夜晚降速变闷）/ 模式（冒险更低沉）动态调速率·低通·音量；9 种事件各配专属音效——`tap`（点击泡）/ `breed`（繁殖上行铃）/ `feed`（投喂软弹）/ `build`（建造木质 tok）/ `remove`（拆除下行咔）/ `snatch`（被叼低沉 whoosh+闷击）/ `unlock`（纪念解锁揭示琶音）/ `mode`（选模式柔和涌动）/ `nuzzle`（Bogyó 蹭脸呼噜）。全部为 DSP 渲染的真实 `.wav`，零版权风险、同源加载无 CORS；`audio.js` 改为「按需 fetch + decodeAudioData + sfx(name) 分发」，单个文件失败静默降级，绝不崩游戏。
+- **Phase 9 自适应音频**：背景乐从「两层固定正弦 drone」升级为 `assets/audio/music_loop.wav` 生成式 pad（C 大调五声音阶、缓慢呼吸、随机钟琴点缀，16s 无缝循环），并随昼夜（夜晚降速变闷）/ 模式（冒险更低沉）动态调速率·低通·音量；12 种事件各配专属音效——`tap`（点击泡）/ `breed`（繁殖上行铃）/ `feed`（投喂软弹）/ `build`（建造木质 tok）/ `remove`（拆除下行咔）/ `snatch`（被叼低沉 whoosh+闷击）/ `unlock`（纪念解锁揭示琶音）/ `mode`（选模式柔和涌动）/ `nuzzle`（Bogyó 蹭脸呼噜）/ `seagull`（海鸥）/ `horn`（汽笛）/ `splash`（水花）。全部为 DSP 渲染的真实 `.wav`，零版权风险、同源加载无 CORS；`audio.js` 改为「按需 fetch + decodeAudioData + sfx(name) 分发」，单个文件失败静默降级，绝不崩游戏。
 
 - **Phase 10 向「我的世界」看齐**：开篇从「命名卡」升级为 MC 式体验——① **标题屏**：优雅海洋风大标题 + 竖排菜单（继续 / 新建世界 / 设置 / 语言），背景是缓缓漂移的活海洋；② **新建世界面板**（对齐 MC Create New World）：世界名 / 游戏模式(循环按钮) / 生物群系(卡片选择·**实时缩略图**) / 种子码(留空随机·可抄写分享) / 你的水母(5 变体) / 起始礼包(开关)；③ **5 个生物群系**：珊瑚礁(暖青绿·珊瑚丛) / 极地冰海(冷白蓝·浮冰·节奏慢) / 深海热泉(暗红火山微光·缺氧更快) / 荧光湾(霓虹·荧光经济×1.25) / **蘑菇海(罕见·种子<0.5% 开出·无掠食者)**，水色参照真实 MC 海洋群系 hex；④ **种子系统**：`xfnv1a` 哈希 + `mulberry32` PRNG，装饰散布 / 稀有 / 蘑菇海 / 幻紫全部确定性派生，同种子同世界、可分享；⑤ **群系专属物种权重**：各群系偏好不同水母（珊瑚礁偏暖 / 极地偏蓝 / 荧光偏荧光系），接入生成与变异逻辑（`weightedPaletteIndex`）；⑥ **伴随水母**（美西螈模型）：樱粉 / 焦糖棕 / 流金 / 冰蓝 + **幻紫(稀有，仅特定种子解锁)**，长期跟随光标、HUD 显示头像，区别于 Bogyó；⑦ 存档升 v3（`worldType / seed / companion`），旧存档自动迁移。参考：<https://minecraft.wiki/w/Create_New_World> · <https://minecraft.wiki/w/Biome> · <https://minecraft.wiki/w/Axolotl>
 
