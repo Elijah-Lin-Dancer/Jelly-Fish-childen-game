@@ -40,6 +40,9 @@
   <div class="ach" id="bio" role="button" tabindex="0" aria-label="Bioluminescence">
     <svg class="ic" viewBox="0 0 24 24"><path d="M12 2.5 14.6 9.4 21.5 12 14.6 14.6 12 21.5 9.4 14.6 2.5 12 9.4 9.4z"/></svg><span id="bio-text" data-i18n="bio.label">0</span>
   </div>
+  <div class="ach" id="pause-btn" role="button" tabindex="0" data-i18n-title="pause.open" aria-label="Pause">
+    <svg class="ic" viewBox="0 0 24 24"><rect x="7" y="5" width="3.4" height="14" rx="1.1"/><rect x="13.6" y="5" width="3.4" height="14" rx="1.1"/></svg>
+  </div>
 </div>
 
 <div class="hud hud-bottom-right">
@@ -62,6 +65,18 @@
 <div class="hud hud-bottom-left">
   <div><span data-i18n="brand">JELLYFISH OCEAN · IMMERSIVE</span></div>
   <div><span id="theme-text" data-i18n="theme.shallow">Sunlit Shallows</span> · <span id="fps-text">60 FPS</span></div>
+</div>
+
+<div class="pause-modal hide" id="pause-modal">
+  <div class="pause-panel">
+    <div class="pause-title" id="pause-title">Paused</div>
+    <div class="pause-menu">
+      <div class="pause-item primary" id="pause-resume" role="button" tabindex="0">Resume</div>
+      <div class="pause-item" id="pause-settings" role="button" tabindex="0">Settings</div>
+      <div class="pause-item quit" id="pause-quit" role="button" tabindex="0">Save &amp; Quit to Title</div>
+    </div>
+    <div class="pause-hint" id="pause-hint">Esc to resume</div>
+  </div>
 </div>
 
 <div class="dex-modal hide" id="settings-modal">

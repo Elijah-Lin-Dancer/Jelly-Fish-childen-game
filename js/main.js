@@ -14,6 +14,7 @@ import { createHome } from './ui/home.js';
 import { createDex } from './ui/dex.js';
 import { createShare } from './ui/share.js';
 import { createSettings } from './ui/settings.js';
+import { createPauseMenu } from './ui/pause.js';
 import { createCoach } from './ui/coach.js';
 import { createInteract, drawHoldRing } from './ui/interact.js';
 import { createBackground, createLightRays, createWaterSurface, createDepthHaze, createTerrainLayer, setZoneProvider, setTerrainProvider } from './systems/scenery.js';
@@ -340,6 +341,12 @@ if (typeof window !== 'undefined') {
     openSettings() { settings.show(); },
     /** 自动化测试用：关闭设置面板 */
     closeSettings() { settings.hide(); },
+    /** 自动化测试用：暂停菜单状态与操作 */
+    get paused() { return paused; },
+    get pauseOpen() { return pauseMenu.isOpen; },
+    get inGame() { return homeEntered; },
+    openPause() { pauseMenu.show(); },
+    closePause() { pauseMenu.hide(); },
     /** 切地形并回到该地形的家。11B 的「新建世界」面板会走同一条路径。 */
     setTerrain(type, seed) {
       setTerrain(type, seed);
@@ -746,6 +753,7 @@ const hud = createHud({
   openAtlas: () => atlas.toggle(),
   openBuild: () => buildPad.toggle(),
   openSettings: () => settings.toggle(),
+  openPause: () => pauseMenu.show(),
 });
 
 // ---------- 生态系统 / 温和大鱼（阶段五 · 4.2；阶段八 8B 冒险掠食） ----------
@@ -1018,6 +1026,33 @@ const settings = createSettings({
   onDensityChange: () => applyDensityLive(),
   // 密度切换后给个轻提示（玩家需要确认"我这一下生效了"）
   onDensityToast: (name) => hud.toastKey('settings.density.toast', { name }),
+});
+
+// ---------- 暂停菜单 ----------
+const pauseMenu = createPauseMenu({
+  /** 是否在游戏中：标题屏 / 未进入池塘时不允许暂停 */
+  isInGame: () => !!homeEntered,
+  onPause: () => {
+    paused = true;
+    audio.suspend();               // 暂停时音乐停下来，回来再续
+  },
+  onResume: () => {
+    paused = false;
+    // 关键：重置时间基准。暂停期间 rAF 仍在跑（要画冻结画面），
+    // 但 t 的绝对值一直在涨；不重置的话恢复瞬间昼夜相位会跳。
+    lastT = 0;
+    fpsThrottle = 0;
+    audio.resume();
+  },
+  onOpenSettings: () => settings.show(),
+  onQuit: () => {
+    save.markDirty();
+    save.write();                  // 先落盘，绝不丢进度
+    paused = false;
+    homeEntered = false;           // 回到标题屏后 Esc 不再弹暂停
+    audio.resume();
+    home.show();
+  },
 });
 
 // ---------- 首次进入引导 ----------
@@ -1638,6 +1673,18 @@ function refreshKeyAxis() {
 
 function onKeyDown(e) {
   if (isTypingTarget(e.target)) return;
+  // Esc：暂停菜单开关（Minecraft 同款）。
+  //   设置面板开着时先让设置自己处理（它有自己的 Esc 关闭逻辑），
+  //   否则会出现「按 Esc 同时关设置又开暂停」的打架。
+  if (e.key === 'Escape') {
+    if (settings.isOpen) return;         // 交给设置面板的监听
+    if (!homeEntered) return;            // 标题屏没有可暂停的东西
+    e.preventDefault();
+    pauseMenu.toggle();
+    return;
+  }
+  // 暂停期间不接受移动输入（世界已冻结，移动会让玩家困惑）
+  if (paused) return;
   // 只拦截我们真正处理的键，别抢走浏览器快捷键（如 F5 / Cmd+R）
   if (!KEY_DIRS[e.key]) return;
   heldKeys.add(e.key);
@@ -1999,6 +2046,10 @@ let dtGlobal = 16.667;
 let tGlobal = 0;
 let fpsThrottle = 0;
 let running = true;
+/** 暂停菜单是否打开（主循环据此冻结世界推进，见 loop 里的 dt 归零） */
+let paused = false;
+/** 玩家是否已从标题屏进入池塘（决定 Esc / ⏸ 是否可用） */
+let homeEntered = false;
 
 // ---------- 主循环 ----------
 function loop(t) {
@@ -2009,6 +2060,11 @@ function loop(t) {
   // 钳制：切后台回来避免跳帧
   if (dt > 33) dt = 33;
   if (dt < 0) dt = 0;
+  // 暂停：仍继续绘制（画面定住不动、能看到遮罩后的世界），
+  // 但把所有时间推进量归零 —— 世界完全冻结。
+  //   dt=0 让 update 里的 dt 相关积分全部失效；
+  //   t 用 tGlobal 冻结值，避免依赖绝对时间的动画（昼夜 / 相位）继续走。
+  if (paused) { dt = 0; t = tGlobal; }
   dtGlobal = dt;
   tGlobal = t;
 
@@ -2084,6 +2140,7 @@ function start() {
   dex.bind();
   settings.bind();
   settings.init();
+  pauseMenu.bind();
   hud.refreshDex();
   hud.refreshPhase();
   hud.refreshTheme();
@@ -2128,6 +2185,7 @@ function start() {
 
   // 首次进入（点"继续"）后的引导 / 提示
   home.onEnter(() => {
+    homeEntered = true;
     coach.start();
     maybeAnnounceRare();
   });

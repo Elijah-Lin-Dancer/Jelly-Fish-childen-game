@@ -10,6 +10,7 @@ export function createHud(actions) {
   const el = {
     dex: document.getElementById('dex'),
     dexText: document.getElementById('dex-text'),
+    pauseBtn: document.getElementById('pause-btn'),
     phase: document.getElementById('phase-text'),
     themeText: document.getElementById('theme-text'),
     fps: document.getElementById('fps-text'),
@@ -218,6 +219,14 @@ export function createHud(actions) {
           e.preventDefault();
           if (actions.openDex) actions.openDex();
         }
+      });
+    }
+    // 暂停按钮（右上角）：与 Esc 同一个入口
+    if (el.pauseBtn) {
+      const pause = () => actions.openPause && actions.openPause();
+      el.pauseBtn.addEventListener('click', pause);
+      el.pauseBtn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pause(); }
       });
     }
   }
