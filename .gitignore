@@ -28,3 +28,6 @@ __pycache__/
 
 # Verification screenshots (local evidence only, not source — never commit)
 docs/*.png
+
+# Screenshot generator raw output (2x PNG scratch)
+.screenshots-raw/

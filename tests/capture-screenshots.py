@@ -22,8 +22,12 @@ def snap(pg, name):
     pg.screenshot(path=f"{RAW}/{name}.png")
 
 
-def enter_world(pg):
-    """复用验证脚本的进游戏流程。"""
+def enter_world(pg, lush=True):
+    """复用验证脚本的进游戏流程。
+
+    lush=True 时把生物密度调到「热闹」档（×1.5）并等生物补齐，
+    让展示图更饱满（默认「标准」档画面会偏空）。
+    """
     pg.wait_for_timeout(1600)
     pg.click("#title-new")
     pg.wait_for_timeout(600)
@@ -36,6 +40,10 @@ def enter_world(pg):
     except Exception:
         pass
     pg.wait_for_timeout(800)
+    if lush:
+        # 密度调最高档（busy），等补生成铺开
+        pg.evaluate("() => window.__ocean.setDensity(2)")
+        pg.wait_for_timeout(3000)
 
 
 def main():
@@ -51,11 +59,16 @@ def main():
         pg.wait_for_timeout(1600)
         pg.evaluate("() => localStorage.clear()")
         pg.reload()
-        enter_world(pg)
+        enter_world(pg, lush=True)
 
+        # 主门面：略微下移相机，让「水下 + 交错光柱 + 满屏水母」占满画面
+        pg.evaluate("() => window.__ocean.nudgeCamera(0, 240)")
+        pg.wait_for_timeout(4200)  # 等 toast 完全淡出，画面干净
         snap(pg, "ingame-spawn")
-        pg.evaluate("() => window.__ocean.nudgeCamera(600, 1600)")
-        pg.wait_for_timeout(1200)
+
+        # 中层水域：既是「深潜」氛围，又保留满屏生物（别推太深，无光区会很空）
+        pg.evaluate("() => window.__ocean.nudgeCamera(300, 380)")
+        pg.wait_for_timeout(4200)
         snap(pg, "deep")
 
         # 新建世界面板（回标题重进）
@@ -67,7 +80,7 @@ def main():
         snap(pg, "create")
         pg.click("#create-close")
         pg.wait_for_timeout(400)
-        enter_world(pg)
+        enter_world(pg, lush=True)
 
         # FAB
         try:
@@ -109,7 +122,7 @@ def main():
                         is_mobile=True, has_touch=True)
         pm.on("pageerror", lambda e: errs.append(str(e)))
         pm.goto(BASE)
-        enter_world(pm)
+        enter_world(pm, lush=True)
         snap(pm, "mobile-ingame")
         pm.close()
 
