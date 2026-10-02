@@ -1,0 +1,34 @@
+#!/bin/sh
+# ============================================================
+#  pre-commit 钩子：提交身份守护
+# ------------------------------------------------------------
+#  背景：本项目历史曾被"假邮箱"污染（elijah.lin.dancer@gmail.com
+#        / elijah@users.noreply.github.com），导致 GitHub 贡献者列表
+#        混入匿名身份和陌生人。此钩子从源头拦截。
+#
+#  规则：只允许用作者本人邮箱提交；否则拒绝并给出修复指引。
+#  如确需换邮箱，改下面的 ALLOWED 白名单即可。
+# ============================================================
+
+ALLOWED="linyvlin718@gmail.com"
+EMAIL="$(git config user.email)"
+
+if [ -z "$EMAIL" ]; then
+  echo "❌ [pre-commit] 未配置 git 邮箱，无法确定提交身份。"
+  echo "   请执行：git config user.email \"$ALLOWED\""
+  exit 1
+fi
+
+case " $ALLOWED " in
+  *" $EMAIL "*)
+    exit 0   # 身份合法，放行
+    ;;
+  *)
+    echo "❌ [pre-commit] 提交被拦截：当前邮箱 '$EMAIL' 不在允许列表。"
+    echo "   允许的邮箱：$ALLOWED"
+    echo "   这通常意味着某个环境/工具用了错误身份。修复："
+    echo "     git config user.email \"$ALLOWED\""
+    echo "   如确需新增邮箱，请修改 .git/hooks/pre-commit 的 ALLOWED。"
+    exit 1
+    ;;
+esac

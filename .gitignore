@@ -22,5 +22,9 @@ npm-debug.log*
 # Temporary
 *.tmp
 
+# Python
+__pycache__/
+*.pyc
+
 # Verification screenshots (local evidence only, not source — never commit)
 docs/*.png
