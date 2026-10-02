@@ -2,7 +2,7 @@
 //  远景鲸鱼（体积剪影 + 喷气泡）
 // ============================================================
 
-import { rand, TAU } from '../core/config.js';
+import { rand, TAU, CREATURE_SCALE } from '../core/config.js';
 import { WORLD } from '../systems/terrain.js';
 // 期二：鲸鱼虽然只是"远景剪影"，但它仍然是一团有体积的身体。
 // 用共享库画，它的受光方向才和地形、水母一致 —— 否则会出现
@@ -59,7 +59,9 @@ export class Whale {
     this.x = initial ? rand(WORLD.x0, WORLD.x1) : WORLD.x0 - 260;
     this.y = this._deepY();
     this.vx = rand(0.3, 0.6);
-    this.size = rand(140, 220);
+    // 尺寸相对陆地参照校准（见 config.CREATURE_SCALE）：
+    // 全长 140~220 → 约 119~187，仍是唯一的巨型生物，约为岛直径的 1/4。
+    this.size = rand(140, 220) * CREATURE_SCALE.whale;
     this.blowTimer = rand(200, 500);
     this.drift = rand(0, TAU);
   }

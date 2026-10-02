@@ -36,11 +36,22 @@ export function createScheduler() {
         if (sys.reconcile) sys.reconcile(dt, t);
 
         // 3) 绘制：按 space 决定要不要套相机变换（noDraw 的层只更新不画）
+        //
+        // ⚠ 变换顺序必须「先 scale 后 translate」，不能反过来（这是个真改过 bug）。
+        //   Canvas 的变换是「后声明先作用」：这里两行的实际语义是
+        //     先 translate(-cam) 再 scale(s)  →  屏幕 = s·p - cam   （错）
+        //     先 scale(s) 再 translate(-cam)  →  屏幕 = s·(p - cam) （对）
+        //   权威模型（state.js 注释 / screenToWorld / camera.toScreen /
+        //   地形层 scenery.js 的逐列换算）全都是 s·(p - cam)。
+        //   两者相差 (1 - scale)·camera —— 出生点附近相机约 (0, -300)、
+        //   scale≈0.556，偏差仅约 130px 不易察觉；相机拖到岛附近
+        //   （cam.y≈-1050）偏差就涨到约 466px，表现为「岸上建筑漂到岛外」
+        //   「点击位置与所见不符」。所有世界实体都受影响。
         const world = sys.space === 'world' && camera && !sys.noDraw;
         if (world) {
           ctx.save();
-          ctx.translate(-camera.x, -camera.y);
           ctx.scale(camera.scale, camera.scale);
+          ctx.translate(-camera.x, -camera.y);
         }
 
         if (sys.entities) {

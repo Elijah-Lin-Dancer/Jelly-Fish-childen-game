@@ -11,6 +11,10 @@ import { PICKABLE_WORLDS, worldById } from '../systems/worlds.js';
 import { COMPANION_VARIANTS } from '../entities/companion.js';
 import { rareCompanionUnlocked, makeRng } from '../core/seed.js';
 import { terrainTypes, createTerrain } from '../systems/terrain.js';
+import { DENSITY_TIERS } from '../core/state.js';
+
+/** 密度档的文案键（与设置面板共用 t('settings.density.*')） */
+const DENSITY_KEYS = DENSITY_TIERS.map((d) => d.key);
 
 /**
  * @param {object} opts
@@ -27,6 +31,8 @@ export function createWorldPanel({ onConfirm, onPreview, onToast } = {}) {
     name: document.getElementById('cw-name'),
     modeLabel: document.getElementById('cw-mode-label'),
     mode: document.getElementById('cw-mode'),
+    densityLabel: document.getElementById('cw-density-label'),
+    density: document.getElementById('cw-density'),
     worldLabel: document.getElementById('cw-world-label'),
     worlds: document.getElementById('cw-worlds'),
     terrainLabel: document.getElementById('cw-terrain-label'),
@@ -47,6 +53,9 @@ export function createWorldPanel({ onConfirm, onPreview, onToast } = {}) {
 
   const state = {
     mode: 'peace',
+    // 生物密度（0 稀疏 / 1 标准 / 2 热闹）—— 与设置面板共享同一档位语义，
+    // 开局前就能定，开局后也能在设置里改。
+    density: 1,
     worldType: 'coral',
     terrain: 'shore',
     companion: 'lucy',
@@ -163,6 +172,13 @@ export function createWorldPanel({ onConfirm, onPreview, onToast } = {}) {
     if (el.mode) el.mode.textContent = state.mode === 'peace' ? t('mode.peace') : t('mode.adventure');
   }
 
+  /** 密度行的文案（三档循环） */
+  function renderDensity() {
+    if (!el.density) return;
+    const key = DENSITY_KEYS[state.density] || DENSITY_KEYS[1];
+    el.density.textContent = t('settings.density.' + key);
+  }
+
   function renderChest() {
     if (el.chest) el.chest.classList.toggle('on', state.starter);
   }
@@ -183,6 +199,8 @@ export function createWorldPanel({ onConfirm, onPreview, onToast } = {}) {
     if (el.title) el.title.textContent = t('create.title');
     if (el.nameLabel) el.nameLabel.textContent = t('create.name');
     if (el.modeLabel) el.modeLabel.textContent = t('create.mode');
+    if (el.densityLabel) el.densityLabel.textContent = t('settings.density');
+    renderDensity();
     if (el.worldLabel) el.worldLabel.textContent = t('create.world');
     if (el.terrainLabel) el.terrainLabel.textContent = t('create.terrain');
     if (el.seedLabel) el.seedLabel.textContent = t('create.seed');
@@ -196,16 +214,22 @@ export function createWorldPanel({ onConfirm, onPreview, onToast } = {}) {
 
   function show() {
     if (!el.modal) return;
-    // 重置为默认
+    // 重置为默认。密度带「上次选择」——玩家刚把世界调成稀疏，
+    // 下次新建多半还是想稀疏，不该每次弹回标准。
     state.mode = 'peace';
     state.worldType = 'coral';
     state.terrain = 'shore';
     state.companion = 'lucy';
     state.starter = false;
+    try {
+      const saved = JSON.parse(localStorage.getItem('ocean.settings') || '{}');
+      if (typeof saved.density === 'number') state.density = saved.density;
+    } catch (e) { /* 忽略 */ }
     if (el.name) el.name.value = '';
     if (el.seed) el.seed.value = '';
     renderLabels();
     renderMode();
+    renderDensity();
     renderChest();
     renderWorlds();
     renderTerrains();
@@ -232,6 +256,7 @@ export function createWorldPanel({ onConfirm, onPreview, onToast } = {}) {
       onConfirm({
         name,
         mode: state.mode,
+        density: state.density,
         worldType: state.worldType,
         terrain: state.terrain,
         seed: seedStr,
@@ -247,6 +272,21 @@ export function createWorldPanel({ onConfirm, onPreview, onToast } = {}) {
       el.mode.addEventListener('click', () => {
         state.mode = state.mode === 'peace' ? 'adventure' : 'peace';
         renderMode();
+      });
+    }
+    if (el.density) {
+      el.density.addEventListener('click', () => {
+        state.density = (state.density + 1) % DENSITY_KEYS.length;
+        renderDensity();
+        preview();
+      });
+      el.density.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          state.density = (state.density + 1) % DENSITY_KEYS.length;
+          renderDensity();
+          preview();
+        }
       });
     }
     if (el.dice) {

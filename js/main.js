@@ -2,8 +2,8 @@
 //  入口：装配所有模块并启动主循环
 // ============================================================
 
-import { DPR, rand, isMobile, TAU } from './core/config.js';
-import { view, pointer, theme, dayNight, app, perf, setTier, quality, camera, camInput, touchAxis } from './core/state.js';
+import { DPR, rand, isMobile, TAU, CREATURE_SCALE } from './core/config.js';
+import { view, pointer, theme, dayNight, app, perf, setTier, setDensity, density, DENSITY_TIERS, quality, camera, camInput, touchAxis } from './core/state.js';
 import { createScheduler } from './core/loop.js';
 import { createResize } from './core/resize.js';
 import { createAudio } from './core/audio.js';
@@ -301,6 +301,45 @@ if (typeof window !== 'undefined') {
     },
     /** 自动化测试用：报告渲染循环是否在跑（headless 下 document.hidden 会暂停它） */
     get running() { return running; },
+    /** 自动化测试用：当前画质档位与生物密度快照。
+     *  density.mult 是「档位基数 × 玩家系数」后的实际倍数，
+     *  jellyCap 是 spawnJellyfish 的上限 —— 验证密度联动时读这两个。 */
+    get quality() {
+      return {
+        tier: perf.tier,
+        densityIndex: density.index,
+        densityMult: DENSITY_TIERS[density.index] ? DENSITY_TIERS[density.index].mult : 1,
+        jellyfish: quality.jellyfish,
+        fishSchools: quality.fishSchools,
+        fishPerSchool: quality.fishPerSchool,
+        plankton: quality.plankton,
+        bubbles: quality.bubbles,
+        seaweed: quality.seaweed,
+        life: quality.life,
+      };
+    },
+    /** 自动化测试用：世界内实体实时计数（比 swimZ 更全面，含气泡/浮游） */
+    get counts() {
+      return {
+        jellyfish: jellyfish.length,
+        schools: schools.length,
+        turtles: turtles.length,
+        plankton: plankton.length,
+        seaweed: seaweeds.length,
+        bubbles: bubbles.length,
+        life: life.length,
+      };
+    },
+    /** 自动化测试用：直接切密度档（等价于点设置面板） */
+    setDensity(idx) {
+      setDensity(idx);
+      applyDensityLive();
+      return density.index;
+    },
+    /** 自动化测试用：打开设置面板 */
+    openSettings() { settings.show(); },
+    /** 自动化测试用：关闭设置面板 */
+    closeSettings() { settings.hide(); },
     /** 切地形并回到该地形的家。11B 的「新建世界」面板会走同一条路径。 */
     setTerrain(type, seed) {
       setTerrain(type, seed);
@@ -557,7 +596,9 @@ function spawnEggJelly() {
   const ex = cam.toWorldX(view.W / 2);
   const ey = cam.toWorldY(view.H / 2);
   const j = new Jellyfish(ex, ey, 0, {});
-  j.r = 64; j.baseR = 64; j.scale = 1;
+  // 彩蛋水母：固定体型，不走随机半径。收进 CREATURE_SCALE 是为了让
+  // 「海洋生物相对陆地参照物的尺寸」只有一个可调点（见 config 里的说明）。
+  j.r = 64 * CREATURE_SCALE.eggJelly; j.baseR = j.r; j.scale = 1;
   j._buildTentacles();
   j.egg = true;
   jellyfish.push(j);
@@ -832,6 +873,19 @@ function applyWorldConfig(cfg, { announce = true } = {}) {
 const createPanel = createWorldPanel({
   onConfirm: (cfg) => {
     audio.sfx('mode');
+    // 生物密度：必须在 seedWorld 之前应用 —— 它决定这次要生成多少实体。
+    // 同时写回设置面板的持久化状态，让「开局前选」和「游戏中改」是同一个值。
+    if (typeof cfg.density === 'number') {
+      setDensity(cfg.density);
+      try {
+        const raw = JSON.parse(localStorage.getItem('ocean.settings') || '{}');
+        raw.density = cfg.density;
+        localStorage.setItem('ocean.settings', JSON.stringify(raw));
+      } catch (e) { /* 忽略 */ }
+      // 设置面板在下方才定义（const settings = ...），这里直接读会撞 TDZ。
+      // 推到微任务里执行，那时模块已完成初始化。
+      setTimeout(() => { if (settings && settings.render) settings.render(); }, 0);
+    }
     // 全新世界：清空并重新播种
     clearWorld();
     applyWorldConfig(cfg, { announce: false });
@@ -960,6 +1014,10 @@ const settings = createSettings({
     if (auto) perfMon.enable && perfMon.enable();
     else perfMon.disable && perfMon.disable();
   },
+  // 生物密度变更 → 热过渡：目标 > 当前就补生成，反之裁掉离镜头最远的
+  onDensityChange: () => applyDensityLive(),
+  // 密度切换后给个轻提示（玩家需要确认"我这一下生效了"）
+  onDensityToast: (name) => hud.toastKey('settings.density.toast', { name }),
 });
 
 // ---------- 首次进入引导 ----------
@@ -1055,6 +1113,102 @@ function seedWorld(keepJelly) {
   }
   // 阶段十一 B：人类与生活元素（按地形 + 种子确定性布点）
   seedLife();
+}
+
+/**
+ * 生物密度「热过渡」：玩家在设置里切了密度档后立即调整现有世界，
+ * 不用重建世界（重建会丢掉玩家养大的水母、拆掉刚放的建筑）。
+ *
+ *  目标 > 当前 → 在相机可见水域里补生成（幼体幼鱼先来，画面不突兀）
+ *  目标 < 当前 → 移除离镜头最远的个体，但**跳过同伴水母** ——
+ *              同伴是玩家养了一路的伙伴，让它凭空消失是不可接受的。
+ *
+ * 数量口径：水母以 quality.jellyfish 为目标，鱼群/浮游/水草/气泡同理。
+ * 只做「差额补齐 / 超额裁撤」，不做整批重建，保证过渡是连续的。
+ */
+function applyDensityLive() {
+  const vr = cam.visibleRect(200);
+  const cx = camera.x + camera.vw * 0.5;
+  const cy = camera.y + camera.vh * 0.5;
+  const dist2 = (e) => (e.x - cx) ** 2 + (e.y - cy) ** 2;
+
+  /** 在可见水域找个点（depth > 20 才算水，避免把新生物放进岛里） */
+  const waterSpot = (bandId) => {
+    for (let i = 0; i < 24; i++) {
+      const x = rand(vr.x0, vr.x1);
+      const y = rand(vr.y0, vr.y1);
+      if (terrainRef.current.depthAt(x, y) > 20) return { x, y };
+    }
+    const p = terrainRef.current.samplePoint(bandId || 'nearshore');
+    return { x: p.x, y: p.y };
+  };
+
+  // ---- 水母：裁撤时保住「纪念水母」（isMemory，Bogyo 的隐藏彩蛋，
+  //      玩家专门留的念想，不能因为调密度就消失）----
+  const targetJelly = Math.max(1, Math.round(quality.jellyfish));
+  if (jellyfish.length > targetJelly) {
+    const removable = jellyfish
+      .map((j, i) => ({ j, i }))
+      .filter(({ j }) => !j.isMemory)
+      .sort((a, b) => dist2(b.j) - dist2(a.j));      // 离镜头远的先走
+    const need = jellyfish.length - targetJelly;
+    const doomed = new Set(removable.slice(0, need).map(({ j }) => j));
+    if (doomed.size) {
+      for (let i = jellyfish.length - 1; i >= 0; i--) {
+        if (doomed.has(jellyfish[i])) jellyfish.splice(i, 1);
+      }
+    }
+  } else if (jellyfish.length < targetJelly) {
+    const add = Math.min(targetJelly - jellyfish.length, 12);  // 单次别补太猛
+    for (let i = 0; i < add; i++) {
+      const s = waterSpot('nearshore');
+      jellyfish.push(new Jellyfish(s.x, s.y, pickPalette()));
+    }
+  }
+
+  // ---- 鱼群 ----
+  const targetSchools = Math.round(quality.fishSchools);
+  while (schools.length > targetSchools) schools.pop();
+  while (schools.length < targetSchools) {
+    const s = waterSpot('midsea');
+    schools.push(new FishSchool(s.x, s.y, quality.fishPerSchool));
+  }
+
+  // ---- 浮游 ----
+  const targetPlankton = Math.round(quality.plankton);
+  while (plankton.length > targetPlankton) plankton.pop();
+  for (let i = plankton.length; i < targetPlankton; i++) {
+    const s = waterSpot('nearshore');
+    plankton.push(new Plankton(s.x, s.y));
+  }
+
+  // ---- 气泡（不裁撤：它们在自然消散，硬砍会看着突兀；只补差额）----
+  const targetBubbles = Math.round(quality.bubbles);
+  for (let i = bubbles.length; i < targetBubbles; i++) {
+    const s = waterSpot('shallow');
+    bubbles.push(new Bubble(s.x, rand(s.y, vr.y1)));
+  }
+
+  // ---- 海草：沿可见范围重铺（数量少，重铺比逐个增删简单且不抖动）----
+  const targetSeaweed = Math.round(quality.seaweed);
+  if (seaweeds.length !== targetSeaweed && targetSeaweed > 0) {
+    seaweeds.length = 0;
+    for (let i = 0; i < targetSeaweed; i++) {
+      const fx = vr.x0 + ((vr.x1 - vr.x0) / (targetSeaweed + 1)) * (i + 1) + rand(-40, 40);
+      let sy = terrainRef.current.shoreLineAt(fx) + 60;
+      for (let k = 0; k < 12; k++) {
+        if (terrainRef.current.depthAt(fx, sy) > 40) break;
+        sy += 40;
+      }
+      seaweeds.push(new Seaweed(fx, sy));
+    }
+  }
+
+  // ---- 岸上元素：确定性布点，密度变了直接按新密度重铺（同种子 → 同位置）----
+  seedLife();
+
+  hud.refreshButtons();
+  save.markDirty();
 }
 
 /** 软重建：保留全部现有水母，只重置环境 */

@@ -3,7 +3,7 @@
 //  含：呼吸脉冲 / 指针吸引 / 受惊回弹 / 成长进化 / 入夜增亮
 // ============================================================
 
-import { rand, TAU, damp, clamp } from '../core/config.js';
+import { rand, TAU, damp, clamp, CREATURE_SCALE } from '../core/config.js';
 import { pointer, view, theme, dayNight, camera, screenToWorld, screenRadius } from '../core/state.js';
 import { WORLD } from '../systems/terrain.js';
 import { randomTraits, normalizeTraits } from '../gameplay/genes.js';
@@ -83,7 +83,9 @@ export class Jellyfish {
     // 阶段十一：世界坐标下相机缩放自动处理「小屏显得太大」的问题，
     // 这里只保留一点尺寸参考，让极小的视口不至于挤满。
     const scaleRef = Math.min(1, Math.max(0.72, Math.min(view.W, view.H) / 720));
-    this.r = (juvenile ? rand(10, 14) : rand(22, 48)) * scaleRef;
+    // 尺寸基准：相对陆地参照物校准（见 config.CREATURE_SCALE 的说明）。
+    // 成年伞径 22~48 → 约 13~29，与棕榈高同量级，不再压过灯塔。
+    this.r = (juvenile ? rand(10, 14) : rand(22, 48)) * scaleRef * CREATURE_SCALE.jellyfish;
     this.baseR = this.r;
 
     // 成长
@@ -101,7 +103,10 @@ export class Jellyfish {
     this.bornAt = 0;
 
     // 阶段八 8B：进食成长上限 / 缺氧 / 休眠
-    this.growthCap = opts.growthCap || 1.6;   // scale 可成长到的上限（冒险模式更高）
+    // 尺寸基准下调后（见 CREATURE_SCALE），成长上限从 1.6 微调到 1.5 ——
+    // 基准缩小 0.6 倍，若上限保持不变，养成后的绝对体型反而缩水更多，
+    // 玩家"喂大"的成就感会被削弱。1.5 让养成终点仍明显大于初始体。
+    this.growthCap = opts.growthCap || 1.5;   // scale 可成长到的上限（冒险模式更高）
     this.fed = 0;                            // 累计进食量（0..）
     this.feedFlash = 0;                      // 进食时的微光
     this.oxygen = 1;                         // 0..1；冒险模式下随深度变化

@@ -2,7 +2,7 @@
 //  海龟
 // ============================================================
 
-import { rand, TAU } from '../core/config.js';
+import { rand, TAU, CREATURE_SCALE } from '../core/config.js';
 import { WORLD } from '../systems/terrain.js';
 // 期二：龟壳做成真正的"穹顶"（受光球体），而不是一块椭圆平涂
 import {
@@ -18,7 +18,9 @@ export class Turtle {
     this.vx = rand(0.4, 0.9) * (Math.random() < 0.5 ? 1 : -1);
     this.dir = this.vx > 0 ? 1 : -1;
     this.flap = 0;
-    this.size = rand(30, 46);
+    // 尺寸相对陆地参照校准（见 config.CREATURE_SCALE）：
+    // 体长 30~46 → 约 20~30，与遮阳伞盘径同量级。
+    this.size = rand(30, 46) * CREATURE_SCALE.turtle;
     // 期二：龟甲做成 'R,G,B' 三元组（旧版是 rgba 字符串，shade() 处理不了）
     //   亮度比初版调高：初版 34% 明度在深水背景里糊成一团灰，看不出甲色。
     this.shell = hslTriple(rand(178, 205), 32, 44);   // 深青褐甲

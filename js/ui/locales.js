@@ -152,6 +152,11 @@ export const LOCALES = {
     'settings.theme': 'Theme',
     'settings.language': 'Language',
     'settings.daynight': 'Day-night cycle',
+    'settings.density': 'Creature density',
+    'settings.density.sparse': 'Sparse',
+    'settings.density.normal': 'Normal',
+    'settings.density.busy': 'Bustling',
+    'settings.density.toast': 'Creature density: {name}',
 
     'coach.step1': '👆 Move your pointer to attract jellyfish',
     'coach.step2': '✋ Hold to summon a new jellyfish — tap to unlock species',
@@ -420,6 +425,11 @@ export const LOCALES = {
     'settings.theme': '主题',
     'settings.language': '语言',
     'settings.daynight': '昼夜循环',
+    'settings.density': '生物密度',
+    'settings.density.sparse': '稀疏',
+    'settings.density.normal': '标准',
+    'settings.density.busy': '热闹',
+    'settings.density.toast': '生物密度：{name}',
 
     'coach.step1': '👆 移动鼠标 / 手指吸引水母',
     'coach.step2': '✋ 长按召唤新水母 — 点击可解锁物种',

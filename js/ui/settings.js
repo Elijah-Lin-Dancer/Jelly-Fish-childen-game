@@ -7,12 +7,12 @@
 // ============================================================
 
 import { t } from './i18n.js';
-import { setTier, perf, theme, dayNight, app } from '../core/state.js';
+import { setTier, setDensity, density, DENSITY_TIERS, perf, theme, dayNight, app } from '../core/state.js';
 
 const STORAGE_KEY = 'ocean.settings';
 
 function load() {
-  const def = { tier: -1, reducedMotion: false, sound: false };
+  const def = { tier: -1, reducedMotion: false, sound: false, density: 1 };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return def;
@@ -29,6 +29,8 @@ export function createSettings(actions = {}) {
     close: document.getElementById('settings-close'),
     title: document.getElementById('settings-title'),
     tier: document.getElementById('settings-tier'),
+    densitySeg: document.getElementById('settings-density'),
+    densityLabel: document.getElementById('settings-density-label'),
     motion: document.getElementById('settings-motion'),
     sound: document.getElementById('settings-sound'),
     tierLabel: document.getElementById('settings-tier-label'),
@@ -63,6 +65,20 @@ export function createSettings(actions = {}) {
     } else {
       if (actions.onAutoQuality) actions.onAutoQuality(true);
     }
+    // 画质档位变了会重算 quality（密度系数会一并乘进去），
+    // 所以这里要再刷一次已保存的密度档，避免被档位基数覆盖。
+    syncDensity();
+  }
+
+  /**
+   * 把「已保存的密度档」同步进 state 并应用到 world。
+   * 单独抽出来，是因为 applyTier 和「密度行点击」都要走这条路。
+   * applyToWorld=true 时通知 main 做「热过渡」（补生成 / 裁远端），
+   * 启动阶段不需要（世界还没生成，seedWorld 会直接按新密度铺）。
+   */
+  function syncDensity(applyToWorld) {
+    setDensity(typeof state.density === 'number' ? state.density : 1);
+    if (applyToWorld && actions.onDensityChange) actions.onDensityChange();
   }
 
   /** seg-group 通用构建（主题/语言沿用画质行的交互模式） */
@@ -92,6 +108,7 @@ export function createSettings(actions = {}) {
     if (el.themeLabel) el.themeLabel.textContent = t('settings.theme');
     if (el.langLabel) el.langLabel.textContent = t('settings.language');
     if (el.daynightLabel) el.daynightLabel.textContent = t('settings.daynight');
+    if (el.densityLabel) el.densityLabel.textContent = t('settings.density');
 
     if (el.tier) {
       const opts = [
@@ -125,6 +142,17 @@ export function createSettings(actions = {}) {
         el.tier.appendChild(b);
       }
     }
+
+    // 生物密度（三档：稀疏 / 标准 / 热闹）—— 与画质解耦的独立杠杆
+    buildSeg(el.densitySeg, DENSITY_TIERS.map((d, i) => ({
+      v: i, label: t('settings.density.' + d.key),
+    })), (o) => state.density === o.v, (o) => {
+      if (state.density === o.v) return;
+      state.density = o.v;
+      persist();
+      syncDensity(true);           // 游戏中即时生效（热过渡）
+      if (actions.onDensityToast) actions.onDensityToast(t('settings.density.' + DENSITY_TIERS[o.v].key));
+    });
 
     // 主题（右下角"切换主题"钮移入于此；直接读 state.theme.name）
     buildSeg(el.themeSeg, [

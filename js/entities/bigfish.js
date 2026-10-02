@@ -6,7 +6,7 @@
 //  - 状态机：wander（漂移/趋向水母群中心） → approach（靠近并轻散水母）
 // ============================================================
 
-import { rand, TAU } from '../core/config.js';
+import { rand, TAU, CREATURE_SCALE } from '../core/config.js';
 import { camera } from '../core/state.js';
 import { WORLD } from '../systems/terrain.js';
 // 期二：大鱼同样接入共享光照。它是最"贴脸"的水下生物（会来叼水母），
@@ -26,7 +26,9 @@ export class BigFish {
     this.y = camera.y + rand(0.2, 0.8) * camera.vh;
     this.vx = rand(-0.4, 0.4);
     this.vy = rand(-0.2, 0.2);
-    this.size = rand(34, 46);
+    // 尺寸相对陆地参照校准（见 config.CREATURE_SCALE）：
+    // 体长 34~46 → 约 24~32，约棕榈高的一半。
+    this.size = rand(34, 46) * CREATURE_SCALE.bigfish;
     this.hue = rand(200, 260);
     // 期二：受光颜色用 'R,G,B'（旧版是 hsla 字符串，shade() 处理不了）
     this.base = hslTriple(this.hue, 55, 62);

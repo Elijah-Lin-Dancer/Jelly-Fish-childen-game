@@ -70,15 +70,64 @@ export const CAM_DAMP = 0.86;
 /** 当前性能等级索引 */
 export const perf = { tier: 0, fps: 60, samples: [], lowStreak: 0, highStreak: 0 };
 
-/** 当前 QUALITY 对象（随 perf.tier 变化） */
+// ============================================================
+//  生物密度（玩家可调，与画质解耦）
+// ------------------------------------------------------------
+//  【为什么从画质里拆出来】原先「生物数量」是画质档位的副产物 ——
+//  低画质 = 少水母。问题是玩家不知道这件事：觉得卡顿的人会去调
+//  「画质」，但看到的是光效变化，容易以为「调了没用」；
+//  而想要热闹的玩家在低配机上永远看不到密集的鱼群。
+//  现在两个杠杆各管各的：
+//      画质档位  = 光效 / 粒子 / 光束（渲染开销）
+//      密度系数  = 水母 / 鱼群 / 浮游 / 海草 / 岸上元素（实体数量）
+//
+//  【作用方式】setTier 先把档位基数写进 quality，再乘以本系数。
+//  这样「自动降档」只动画质、不动密度（玩家的选择被尊重），
+//  三档系数 ×0.5 / ×1.0 / ×1.5 覆盖「省电」到「热闹」。
+// ============================================================
+export const DENSITY_TIERS = [
+  { key: 'sparse', mult: 0.5 },   // 稀疏 —— 弱机 / 想安静看海
+  { key: 'normal', mult: 1.0 },   // 标准（默认）
+  { key: 'busy', mult: 1.5 },     // 热闹 —— 鱼群满屏
+];
+
+export const density = { index: 1 };   // 默认「标准」
+/** 只影响实体数量的那些键（渲染开销类的键不参与缩放） */
+const DENSITY_KEYS = ['jellyfish', 'fishSchools', 'fishPerSchool', 'plankton', 'bubbles', 'seaweed', 'life'];
+
+/** 当前 QUALITY 对象（随 perf.tier 与 density 变化） */
 export const quality = { ...QUALITY_TIERS[isMobile ? 'mobile' : 'desktop'][0] };
+
+/** 把「档位基数 × 密度系数」写进 quality。改画质或改密度后都要调用。 */
+function applyQuality() {
+  const table = QUALITY_TIERS[isMobile ? 'mobile' : 'desktop'];
+  const base = table[Math.max(0, Math.min(table.length - 1, perf.tier))];
+  const mult = DENSITY_TIERS[Math.max(0, Math.min(DENSITY_TIERS.length - 1, density.index))].mult;
+  Object.assign(quality, base);
+  for (const k of DENSITY_KEYS) {
+    if (typeof quality[k] === 'number') {
+      // 水母这类核心实体至少留 1 只，否则「空海」看着像坏了
+      quality[k] = k === 'jellyfish' ? Math.max(1, Math.round(quality[k] * mult)) : quality[k] * mult;
+    }
+  }
+  return quality;
+}
 
 export function setTier(t) {
   const table = QUALITY_TIERS[isMobile ? 'mobile' : 'desktop'];
   perf.tier = Math.max(0, Math.min(table.length - 1, t));
-  Object.assign(quality, table[perf.tier]);
+  applyQuality();
   return perf.tier;
 }
+
+/** 设置生物密度档（0 稀疏 / 1 标准 / 2 热闹）。返回当前档位。 */
+export function setDensity(idx) {
+  density.index = Math.max(0, Math.min(DENSITY_TIERS.length - 1, idx));
+  applyQuality();
+  return density.index;
+}
+
+export { applyQuality };
 
 /** 主题：shallow（阳光浅海） / deep（深邃夜潜） */
 export const THEMES = {
