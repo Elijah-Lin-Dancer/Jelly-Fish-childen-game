@@ -21,3 +21,6 @@ npm-debug.log*
 
 # Temporary
 *.tmp
+
+# Verification screenshots (local evidence only, not source — never commit)
+docs/*.png
