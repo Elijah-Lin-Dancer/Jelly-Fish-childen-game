@@ -93,7 +93,9 @@
   | `feeder`       | 投喂 50 次 | 投饵达人   |
 - 存储 `localStorage('ocean.ach')` = `{ id: unlockedAt }`。
 - HUD 显示已解锁星数 `⭐ n/6`；解锁时弹成就 toast（带图标）。
-- 统计埋点：在 `spawnJellyfish / feeding.drop / unlockJelly / mutate` 处 +1 计数。
+- 统计埋点：在 `spawnJellyfish / feeding.drop / unlockJelly / mutate / breeding.onBreed` 处 +1 计数，
+  并在对应位置调用 `achievements.check(stats, ...)` —— 繁育成就依赖 `stats.breeds`，
+  必须在繁育成功的那一刻触发，否则玩家看不到即时解锁提示。
 
 ### 改动文件
 
