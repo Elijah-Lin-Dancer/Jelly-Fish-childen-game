@@ -104,6 +104,7 @@ const stats = {
   fed: 0,        // 投喂次数
   mutations: 0,  // 变异次数
   breeds: 0,     // 繁育次数（阶段六）
+  herded: 0,     // 引水母归巢达成次数（阶段七轻量玩法）
   get speciesFound() { return collection ? collection.size : 0; },
   get speciesTotal() { return collection ? collection.total : 6; },
 };
@@ -665,6 +666,7 @@ const home = createHome({
     stats.fed = 0;
     stats.mutations = 0;
     stats.breeds = 0;
+    stats.herded = 0;
     if (hud.refreshBio) hud.refreshBio(economy.bio);
     clearWorld();
     seedWorld(null);
@@ -690,10 +692,9 @@ const share = createShare(
 // ---------- 轻量玩法：引水母归巢 ----------
 const activity = createActivity(() => jellyfish, {
   onSuccess: () => {
-    hud.toast('activity.success');
+    stats.herded++;
+    hud.toastKey('activity.success', { n: stats.herded });
     ripples.push(new Celebrate(cam.toWorldX(view.W / 2), cam.toWorldY(view.H / 2), '160, 255, 200', 320));
-    // 达成也计入一个小统计（可选）
-    stats.summoned += 0;
   },
   onStateChange: (s) => hud.refreshActivity(s === 'active'),
 });
@@ -789,8 +790,10 @@ const ecosystem = createEcosystem({
 // ---------- 阶段六：繁育 + 繁育/专长面板 ----------
 const breeding = createBreeding({
   jellyfish,
-  cap: () => Math.round(quality.jellyfish * 2.5),
+  cap: () => jellyCap(),
   getMutateBonus: () => specialize.mutateBonus(),
+  // 繁育 push 之后数量会短暂超限，交给统一的裁剪逻辑处理
+  onOverflow: () => trimJellyfish(jellyCap()),
   onBreed: (child, info) => {
     stats.breeds++;
     economy.gain(10 + (info.hybrid ? 8 : 0) + info.mutated.length * 4);
@@ -803,6 +806,9 @@ const breeding = createBreeding({
     if (hud.refreshBio) hud.refreshBio(economy.bio);
     if (lab.isOpen) lab.render();
     audio.sfx('breed');
+    // 繁育成就（breeder）靠 stats.breeds 判定 —— 必须在这里触发，
+    // 否则玩家繁育完不会立刻看到「养育大师」解锁。
+    achievements.check(stats, { type: 'breed' });
   },
 });
 
@@ -1423,18 +1429,68 @@ function maybeAnnounceRare() {
 }
 
 // ---------- 生成 / 爆裂 ----------
+
+/**
+ * 水母数量上限。
+ * 繁育（breeding.cap）与召唤（spawnJellyfish）必须用同一个口径 ——
+ * 之前两边一个 Math.round、一个不取整，差 0.5 就够让实际存量漂移。
+ */
+function jellyCap() {
+  return Math.round(quality.jellyfish * 2.5);
+}
+
+/**
+ * 把水母数量裁到上限以内。
+ *
+ * 为什么要「挑着删」：超限时如果无脑删数组首位（最老的那只），
+ * 玩家精心培育的变异体 / 杂交体 / 每日稀有客可能被静默清掉，
+ * 而且不留任何提示 —— 这是不可接受的。
+ *
+ * 剔除优先级：
+ *   1. 普通个体（非变异 / 非杂交 / 非稀有 / 非彩蛋 / 非纪念）里最老的先走
+ *   2. 全是特殊个体时，才动特殊个体里最老的一个（宁可超上限也不能无限增长）
+ *   3. 彩蛋水母（egg）与 Bogyo 的隐藏纪念水母（isMemory）永不剔除
+ */
+function trimJellyfish(cap) {
+  let guard = 0;
+  while (jellyfish.length > cap && guard++ < 64) {
+    let victim = -1;
+    // 1) 优先剔除普通个体
+    for (let i = 0; i < jellyfish.length; i++) {
+      const j = jellyfish[i];
+      if (j.egg || j.isMemory) continue;
+      if (j.rare || j.hybrid || j.mutated) continue;
+      victim = i;
+      break;
+    }
+    // 2) 全是特殊个体 —— 退而求其次，剔除最老的一个
+    if (victim < 0) {
+      for (let i = 0; i < jellyfish.length; i++) {
+        const j = jellyfish[i];
+        if (j.egg || j.isMemory) continue;
+        victim = i;
+        break;
+      }
+    }
+    // 3) 连彩蛋 / 纪念都算满了 —— 认了，允许略微超限（数量本身有硬上限）
+    if (victim < 0) break;
+    jellyfish.splice(victim, 1);
+  }
+}
+
 function spawnJellyfish(x, y, juvenile) {
-  const cap = quality.jellyfish * 2.5;
-  if (jellyfish.length > cap) jellyfish.shift();
   const j = new Jellyfish(x, y, pickPalette(), {
     juvenile,
     // 冒险模式：水母可通过进食长得更大
     growthCap: mode.isAdventure() ? 2.0 : 1.0,
   });
   jellyfish.push(j);
+  // 先入队再裁剪：新水母在数组末尾（最新），裁剪时优先动最老的，
+  // 所以刚召唤的这只不会立刻被自己挤掉。
+  trimJellyfish(jellyCap());
   audio.sfx('tap');
   save.markDirty();
-  // 召唤统计 + 成就（breeder=30 / summoner=25 都靠它）
+  // 召唤统计 + 成就（summoner=25 靠它；breeder 靠繁育计数，在 onBreed 里触发）
   stats.summoned++;
   achievements.check(stats, { type: 'summon' });
   return j;

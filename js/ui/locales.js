@@ -127,7 +127,7 @@ export const LOCALES = {
     'ach.dex_done': 'Codex Complete',
     'ach.dex_done.desc': 'Discover all six species',
     'ach.breeder': 'Keeper',
-    'ach.breeder.desc': 'Grow 30 jellyfish',
+    'ach.breeder.desc': 'Breed 30 jellyfish',
     'ach.midnight': 'Midnight Visitor',
     'ach.midnight.desc': 'Meet a new species at night',
     'ach.summoner': 'Summoner',
@@ -139,7 +139,7 @@ export const LOCALES = {
 
     'share.saved': '📸 Postcard saved',
     'share.fail': 'Could not save postcard',
-    'activity.success': '🎯 Jellyfish came home!',
+    'activity.success': '🎯 Jellyfish came home! ({n}×)',
 
     'settings.title': 'Settings',
     'settings.quality': 'Quality',
@@ -407,7 +407,7 @@ export const LOCALES = {
     'ach.dex_done': '图鉴全收集',
     'ach.dex_done.desc': '发现全部六种水母',
     'ach.breeder': '养育大师',
-    'ach.breeder.desc': '养大 30 只水母',
+    'ach.breeder.desc': '繁育 30 只水母',
     'ach.midnight': '午夜访客',
     'ach.midnight.desc': '在夜晚邂逅新物种',
     'ach.summoner': '召唤者',
@@ -419,7 +419,7 @@ export const LOCALES = {
 
     'share.saved': '📸 明信片已保存',
     'share.fail': '明信片保存失败',
-    'activity.success': '🎯 水母回家啦！',
+    'activity.success': '🎯 水母回家啦！（{n} 次）',
 
     'settings.title': '设置',
     'settings.quality': '画质',

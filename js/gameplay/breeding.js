@@ -15,7 +15,7 @@ const COOLDOWN = 9000;        // ms
 const HYBRID_CHANCE = 0.12;   // 生出第三种配色
 const MAX_PER_CHECK = 1;      // 每次检测最多发生一次繁育
 
-export function createBreeding({ jellyfish, cap, onBreed, getMutateBonus }) {
+export function createBreeding({ jellyfish, cap, onBreed, getMutateBonus, onOverflow }) {
   let lastCheck = 0;
 
   /** 成年判定：成长到位、非蛋、非休眠、且非隐藏纪念水母 */
@@ -65,6 +65,10 @@ export function createBreeding({ jellyfish, cap, onBreed, getMutateBonus }) {
         const child = new Jellyfish(cx, cy, idx, { juvenile: true, genes: traits });
         child.hybrid = hybrid;
         jellyfish.push(child);
+
+        // push 之后数量会短暂超过上限（cap 是事前检查），
+        // 由调用方裁剪 —— 它知道哪些个体「值得保留」（稀有 / 杂交 / 纪念）。
+        if (onOverflow) onOverflow();
 
         a.lastBredAt = now;
         b.lastBredAt = now;

@@ -32,7 +32,10 @@ export const ACHIEVEMENTS = [
     icon: '🌱',
     label: 'ach.breeder',
     desc: 'ach.breeder.desc',
-    test: (s) => s.summoned >= 30,
+    // 用真正的繁育计数（stats.breeds），而不是召唤数（stats.summoned）——
+    // 否则「养育大师」会在玩家一次没繁育的情况下被误触发，
+    // 且与 summoner 共用同一计数器、阈值只差 5，两个成就连着弹、内容重复。
+    test: (s) => s.breeds >= 30,
   },
   {
     id: 'midnight',

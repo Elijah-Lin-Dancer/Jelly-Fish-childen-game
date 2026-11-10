@@ -139,7 +139,9 @@ export function createAudio(base = 'assets/audio/') {
     if (ctx && ctx.state === 'suspended') ctx.resume();
     soundOn = !soundOn;
     if (soundOn) {
-      load().then(() => { if (soundOn) startLoop(); });
+      // catch 兜底：load() 内部已逐个 try，但 decodeAudioData 等平台 API
+      // 仍可能抛。缺 catch 会变成 unhandledrejection，污染控制台。
+      load().then(() => { if (soundOn) startLoop(); }).catch(() => { /* 音频加载失败，静默降级 */ });
     } else {
       stopLoop();
     }
